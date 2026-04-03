@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, Bot, ChevronRight, PieChart, Users, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import Navbar from '@/components/HomeComponents/Navbar';
 
 const featureCards = [
   {
@@ -28,23 +29,7 @@ const featureCards = [
 export default function LandingPage() {
   return (
     <main className="min-h-screen bg-[#f5f6fa] text-slate-900">
-      <nav className="sticky top-0 z-40 border-b border-slate-200/70 bg-[#f5f6fa]/90 backdrop-blur">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-5 sm:px-8">
-          <Link href="/" className="text-xl font-semibold tracking-tight text-slate-700">
-            <span className="text-indigo-500">Pay</span>
-            <span className="text-emerald-500">Matrix</span>
-          </Link>
-          <Link href="/dashboard">
-            <Button
-              size="sm"
-              className="h-9 rounded-xl bg-indigo-600 px-4 text-sm font-medium text-white hover:bg-indigo-500"
-            >
-              Open App
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
-        </div>
-      </nav>
+      <Navbar/>
 
       <section className="mx-auto flex w-full max-w-6xl flex-col items-center px-5 pb-16 pt-24 text-center sm:px-8 md:pb-20 md:pt-28">
         <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-1.5 text-xs font-medium text-indigo-500 sm:text-sm">

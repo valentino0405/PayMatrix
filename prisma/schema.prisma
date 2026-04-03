@@ -11,3 +11,18 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model User {
+  id String @id @default(uuid())
+
+  // Auth (Clerk / Auth.js)
+  clerkId   String? @unique
+  email     String  @unique
+  username  String? @unique
+  name      String?
+  avatarUrl String?
+
+  // Meta
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
