@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Plus, X, Trash2, UtensilsCrossed, Plane, Home, PartyPopper, ShoppingBag, Zap, Heart, MoreHorizontal } from 'lucide-react';
-import { useStore, Category, SplitType, MEMBER_COLORS } from '@/lib/store';
+import { useStore, Category, SplitType } from '@/lib/store';
 
 const CATEGORY_META: Record<Category, { icon: React.ElementType; emoji: string; color: string }> = {
   Food:          { icon: UtensilsCrossed, emoji: '🍕', color: '#f59e0b' },
@@ -43,7 +43,7 @@ function parseNLP(text: string): { amount?: number; category?: Category } {
     lower.match(/flight|train|cab|taxi|bus|uber|ola|petrol|fuel|travel/) ? 'Travel' :
     lower.match(/hotel|stay|hostel|airbnb|room|rent|house/) ? 'Accommodation' :
     lower.match(/movie|theater|club|party|event|game|sport|concert/) ? 'Entertainment' :
-    lower.match(/shop|buy|purchase|clothes|clothes|grocery|market/) ? 'Shopping' :
+    lower.match(/shop|buy|purchase|clothes|grocery|market/) ? 'Shopping' :
     lower.match(/electric|water|wifi|internet|bill|utility/) ? 'Utilities' :
     lower.match(/doctor|medical|pharma|medicine|health|gym/) ? 'Health' :
     undefined;
@@ -83,8 +83,7 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
         return next;
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amount, splitType]);
+  }, [amount, splitType, group.members]);
 
   // NLP desc parsing
   const handleDescChange = (val: string) => {

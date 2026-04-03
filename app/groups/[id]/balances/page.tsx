@@ -57,7 +57,7 @@ export default function BalancesPage() {
             >
               <div
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white text-base font-extrabold ring-2"
-                style={{ backgroundColor: member.color, ringColor: member.color + '40' }}
+                style={{ backgroundColor: member.color, ['--tw-ring-color' as string]: member.color + '40' } as React.CSSProperties}
               >
                 {member.name.charAt(0).toUpperCase()}
               </div>

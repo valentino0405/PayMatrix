@@ -9,7 +9,7 @@ export default function SettlePage() {
   const { id } = useParams<{ id: string }>();
   const { getGroup, getGroupExpenses, getNetBalances } = useStore();
   const [optimized, setOptimized] = useState(false);
-  const [settled, setSettled] = useState<Set<number>>(new Set());
+  const [settled, setSettled] = useState<Set<string>>(new Set());
   const [animating, setAnimating] = useState(false);
 
   const group = getGroup(id);
@@ -31,15 +31,15 @@ export default function SettlePage() {
     setTimeout(() => { setOptimized(true); setAnimating(false); }, 800);
   };
 
-  const toggleSettled = (i: number) => {
+  const toggleSettled = (key: string) => {
     setSettled(prev => {
       const next = new Set(prev);
-      next.has(i) ? next.delete(i) : next.add(i);
+      next.has(key) ? next.delete(key) : next.add(key);
       return next;
     });
   };
 
-  const allSettled = transactions.every((_, i) => settled.has(i));
+  const allSettled = transactions.every((txn) => settled.has(`${txn.from}-${txn.to}-${txn.amount}`));
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -160,10 +160,11 @@ export default function SettlePage() {
             {transactions.map((txn, i) => {
               const from = getMember(txn.from);
               const to = getMember(txn.to);
-              const isSettled = settled.has(i);
+              const txnKey = `${txn.from}-${txn.to}-${txn.amount}`;
+              const isSettled = settled.has(txnKey);
               return (
                 <div
-                  key={i}
+                  key={txnKey}
                   className={`rounded-2xl border p-4 transition-all ${
                     isSettled
                       ? 'border-emerald-500/20 bg-emerald-500/[0.04] opacity-60'
@@ -208,7 +209,7 @@ export default function SettlePage() {
                       <span style={{ color: from?.color }}>{from?.name}</span> pays <span style={{ color: to?.color }}>{to?.name}</span> ₹{txn.amount.toFixed(2)}
                     </p>
                     <button
-                      onClick={() => toggleSettled(i)}
+                      onClick={() => toggleSettled(txnKey)}
                       className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
                         isSettled
                           ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'

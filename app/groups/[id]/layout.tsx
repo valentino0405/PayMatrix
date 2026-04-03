@@ -28,10 +28,14 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
 
   const base = `/groups/${id}`;
 
-  const handleCopyInvite = () => {
-    navigator.clipboard.writeText(`Join my group "${group.name}" on PayMatrix! Code: ${group.inviteCode}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyInvite = async () => {
+    try {
+      await navigator.clipboard.writeText(`Join my group "${group.name}" on PayMatrix! Code: ${group.inviteCode}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy invite text:', error);
+    }
   };
 
   return (

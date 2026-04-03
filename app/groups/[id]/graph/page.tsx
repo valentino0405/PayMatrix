@@ -19,7 +19,7 @@ function getNodePositions(count: number) {
   });
 }
 
-function Arrow({ x1, y1, x2, y2, amount, color }: { x1: number; y1: number; x2: number; y2: number; amount: number; color: string }) {
+function Arrow({ x1, y1, x2, y2, amount, color, markerIndex }: { x1: number; y1: number; x2: number; y2: number; amount: number; color: string; markerIndex: number }) {
   const dx = x2 - x1;
   const dy = y2 - y1;
   const dist = Math.sqrt(dx * dx + dy * dy);
@@ -50,7 +50,7 @@ function Arrow({ x1, y1, x2, y2, amount, color }: { x1: number; y1: number; x2: 
         stroke={color}
         strokeWidth={2.5}
         strokeOpacity={0.7}
-        markerEnd={`url(#arrow-${color.replace('#', '')})`}
+        markerEnd={`url(#arrow-${markerIndex})`}
         className="transition-all"
       />
       {/* Amount label */}
@@ -87,11 +87,6 @@ export default function GraphPage() {
   const positions = getNodePositions(group.members.length);
   const getMemberIndex = (mid: string) => group.members.findIndex(m => m.id === mid);
 
-  // Unique colors for markers
-  const edgeColors = [...new Set(transactions.map((_, i) => {
-    const from = group.members[getMemberIndex(transactions[i].from)];
-    return from?.color ?? '#6366f1';
-  }))];
 
   return (
     <div>
@@ -136,10 +131,10 @@ export default function GraphPage() {
           <div className="w-full overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0d0d1a]">
             <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
               <defs>
-                {group.members.map(m => (
+                {group.members.map((m, idx) => (
                   <marker
                     key={m.id}
-                    id={`arrow-${m.color.replace('#', '')}`}
+                    id={`arrow-${idx}`}
                     markerWidth="8" markerHeight="6"
                     refX="7" refY="3"
                     orient="auto"
@@ -167,6 +162,7 @@ export default function GraphPage() {
                     x2={toPos.x} y2={toPos.y}
                     amount={txn.amount}
                     color={fromMember?.color ?? '#6366f1'}
+                    markerIndex={fromIdx}
                   />
                 ) : null;
               })}

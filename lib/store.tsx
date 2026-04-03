@@ -102,7 +102,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const removeMember = useCallback((groupId: string, memberId: string) => {
-    setState(p => ({ ...p, groups: p.groups.map(g => g.id === groupId ? { ...g, members: g.members.filter(m => m.id !== memberId) } : g) }));
+    setState(p => {
+      const isReferenced = p.expenses.some(e =>
+        e.groupId === groupId &&
+        (e.paidBy === memberId || e.splits.some(s => s.memberId === memberId))
+      );
+
+      if (isReferenced) return p;
+
+      return {
+        ...p,
+        groups: p.groups.map(g => g.id === groupId
+          ? { ...g, members: g.members.filter(m => m.id !== memberId) }
+          : g),
+      };
+    });
   }, []);
 
   const addExpense = useCallback((e: Omit<Expense, 'id' | 'createdAt'>) => {
@@ -130,7 +144,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const loadDemo = useCallback(() => { setState(makeDemoData()); }, []);
 
-  if (!ready) return null;
   return (
     <Ctx.Provider value={{ ...state, addGroup, addMember, removeMember, addExpense, deleteExpense, getGroup, getGroupExpenses, getNetBalances, loadDemo }}>
       {children}
