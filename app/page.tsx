@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, Zap, Users, PieChart, GitMerge, CheckCircle, TrendingDown, Shield } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import Navbar from '@/components/HomeComponents/Navbar'; // ← from sou2
 
 const features = [
   { icon: Zap, label: 'Min Cash Flow', desc: 'Graph algorithm minimizes the total number of transactions needed to fully settle the group.' },
@@ -24,25 +26,8 @@ export default function LandingPage() {
         <div className="absolute bottom-0 left-1/3 w-[400px] h-[400px] rounded-full bg-emerald-700/10 blur-[120px]" />
       </div>
 
-      {/* NAV */}
-      <nav className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#07070f]/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-5 sm:px-8">
-          <span className="text-xl font-bold tracking-tight">
-            <span className="text-indigo-400">Pay</span><span className="text-emerald-400">Matrix</span>
-          </span>
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="hidden sm:flex text-sm text-slate-400 hover:text-white transition-colors">
-              Dashboard
-            </Link>
-            <Link
-              href="/dashboard"
-              className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)]"
-            >
-              Open App <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-        </div>
-      </nav>
+      {/* NAV — using sou2's Navbar component */}
+      <Navbar />
 
       {/* HERO */}
       <section className="relative mx-auto flex w-full max-w-6xl flex-col items-center px-5 pb-20 pt-28 text-center sm:px-8">
@@ -66,7 +51,7 @@ export default function LandingPage() {
             href="/dashboard"
             className="flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-3.5 text-base font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_30px_rgba(99,102,241,0.5)] hover:-translate-y-0.5"
           >
-            Get Started <ArrowRight className="h-4.5 w-4.5" />
+            Get Started <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
             href="/dashboard"
@@ -144,7 +129,7 @@ export default function LandingPage() {
               href="/dashboard"
               className="mt-6 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-3.5 text-base font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_30px_rgba(99,102,241,0.5)]"
             >
-              Launch PayMatrix <ArrowRight className="h-4.5 w-4.5" />
+              Launch PayMatrix <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </div>

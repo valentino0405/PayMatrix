@@ -1,9 +1,10 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, Users, Zap, X, ArrowRight, Sparkles, Receipt, TrendingUp } from 'lucide-react';
+import { Plus, Users, X, ArrowRight, Sparkles, Receipt, TrendingUp } from 'lucide-react';
 import { useStore, GroupType, MEMBER_COLORS } from '@/lib/store';
+import { syncUser } from '@/app/actions/userActions'; // ← from sou2
 
 const GROUP_TYPES: GroupType[] = ['Trip', 'Roommates', 'Event', 'Other'];
 const TYPE_EMOJI: Record<GroupType, string> = { Trip: '✈️', Roommates: '🏠', Event: '🎉', Other: '💼' };
@@ -11,7 +12,7 @@ const TYPE_EMOJI: Record<GroupType, string> = { Trip: '✈️', Roommates: '🏠
 function Avatar({ name, color, size = 8 }: { name: string; color: string; size?: number }) {
   return (
     <div
-      className={`flex items-center justify-center rounded-full text-white font-bold text-xs`}
+      className="flex items-center justify-center rounded-full text-white font-bold text-xs"
       style={{ backgroundColor: color, width: size * 4, height: size * 4, fontSize: size < 8 ? 10 : 12 }}
     >
       {name.charAt(0).toUpperCase()}
@@ -116,6 +117,11 @@ export default function DashboardPage() {
   const { groups, expenses, loadDemo } = useStore();
   const [showCreate, setShowCreate] = useState(false);
 
+  // ← from sou2: sync the logged-in user to the DB on dashboard mount
+  useEffect(() => {
+    syncUser();
+  }, []);
+
   const totalExpenses = expenses.length;
   const totalAmount = expenses.reduce((s, e) => s + e.amount, 0);
 
@@ -142,7 +148,6 @@ export default function DashboardPage() {
       </nav>
 
       <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8">
-        {/* Header stats */}
         <div className="mb-8">
           <h1 className="text-2xl font-extrabold text-white">My Groups</h1>
           <p className="mt-1 text-sm text-slate-500">Manage your shared expenses and settle up</p>
@@ -164,7 +169,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Groups grid */}
         {groups.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {groups.map(group => {
@@ -201,7 +205,6 @@ export default function DashboardPage() {
             })}
           </div>
         ) : (
-          /* Empty state */
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-indigo-500/10 border border-indigo-500/20">
               <Users className="h-10 w-10 text-indigo-400" />
@@ -225,7 +228,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Demo button when groups exist */}
         {groups.length > 0 && (
           <div className="mt-6 text-center">
             <button onClick={loadDemo} className="text-xs text-slate-600 hover:text-slate-400 transition-colors flex items-center gap-1 mx-auto">
