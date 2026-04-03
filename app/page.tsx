@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, Bot, ChevronRight, PieChart, Users, Zap } from 'lucide-react';
+import { ArrowRight, Bot, ChevronRight, PieChart, ScanLine, Users, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const featureCards = [
@@ -22,6 +22,11 @@ const featureCards = [
     icon: Bot,
     title: 'NLP Input',
     desc: 'Type "Paid 500 for food" and PayMatrix auto-extracts amount, category, and details.',
+  },
+  {
+    icon: ScanLine,
+    title: 'Receipt Scanner',
+    desc: 'Snap a photo of any receipt — Tesseract OCR auto-fills the amount, date, and merchant.',
   },
 ];
 
@@ -70,12 +75,13 @@ export default function LandingPage() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </Link>
-          <Link href="/dashboard">
+          <Link href="/scan">
             <Button
               variant="outline"
               className="h-11 rounded-xl border-slate-300 bg-white px-8 text-[15px] font-medium text-slate-800 hover:bg-slate-100"
             >
-              View Demo
+              <ScanLine className="h-4 w-4" />
+              Scan a Receipt
             </Button>
           </Link>
         </div>
