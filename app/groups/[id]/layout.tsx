@@ -5,6 +5,7 @@ import { ArrowLeft, Copy, Check, Zap, BarChart3, Scale, ListTodo, PieChart, Bell
 import { useState, useMemo } from 'react';
 import { useStore } from '@/lib/store';
 import { calculateSettlements } from '@/lib/settlement';
+import ChatbotWidget from '@/components/ChatbotWidget';
 
 const TABS = [
   { label: 'Expenses',   href: '',           icon: ListTodo  },
@@ -173,6 +174,8 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
       <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
         {children}
       </main>
+
+      <ChatbotWidget groupId={id} />
     </div>
   );
 }

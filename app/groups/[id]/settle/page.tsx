@@ -328,7 +328,7 @@ export default function SettlePage() {
             </div>
           </div>
 
-          <button onClick={handleOptimize} disabled={animating || transactions.length === 0}
+          <button onClick={handleOptimize} id="optimize-btn" disabled={animating || transactions.length === 0}
             className={`w-full rounded-2xl py-4 text-base font-extrabold transition-all ${animating ? 'bg-indigo-600/50 text-indigo-300 cursor-wait' : transactions.length === 0 ? 'bg-white/5 text-slate-400 border border-white/10 cursor-not-allowed' : 'bg-linear-to-r from-indigo-600 to-violet-600 text-white hover:shadow-[0_0_40px_rgba(99,102,241,0.5)] hover:-translate-y-0.5'}`}>
             {animating ? (
               <span className="flex items-center justify-center gap-2">
