@@ -27,11 +27,16 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
   const base = `/groups/${id}`;
   const expenses = getGroupExpenses(id);
   const netBalances = getNetBalances(id);
+  
+  // MERGED STATE LOGIC
   const members = useMemo(() => group?.members ?? [], [group]);
-  const settlements = calculateSettlements(netBalances, members);
+  const settlements = useMemo(() => {
+    return group ? calculateSettlements(netBalances, group.members) : [];
+  }, [group, netBalances]);
 
   // ── Build notifications ─────────────────────────────────────────────────────
   const notifications = useMemo(() => {
+    if (!group) return [];
     const notifs: { id: string; type: 'debt' | 'expense'; text: string; sub: string }[] = [];
 
     // Debt notifications
@@ -59,9 +64,13 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
     });
 
     return notifs;
-  }, [settlements, expenses, members]);
+  }, [settlements, expenses, members, group]);
 
-  if (!group) { router.replace('/dashboard'); return null; }
+  // MERGED ROUTING LOGIC
+  if (!group) { 
+    router.replace('/dashboard'); 
+    return null; 
+  }
 
   const handleCopyInvite = async () => {
     try {
