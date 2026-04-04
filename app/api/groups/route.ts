@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { name, type, members } = await req.json();
+    const { name, type, members, createdViaScan } = await req.json();
     if (!name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 });
     const valid = (members ?? []).filter((m: any) => m.name.trim());
     if (valid.length < 2) return NextResponse.json({ error: 'Need at least 2 members' }, { status: 400 });
@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
         color: MEMBER_COLORS[i % MEMBER_COLORS.length] 
       })),
       inviteCode: icode(),
+      createdViaScan: Boolean(createdViaScan),
       ownerClerkId: userId,
     });
     return NextResponse.json(group, { status: 201 });

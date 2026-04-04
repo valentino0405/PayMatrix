@@ -514,7 +514,12 @@ function GroupsTab({ onCreateGroup }: { onCreateGroup: () => void }) {
                   <div>
                     <span className="text-xl">{TYPE_EMOJI[group.type]}</span>
                     <h3 className="mt-1 text-base font-bold text-white group-hover:text-indigo-300 transition-colors">{group.name}</h3>
-                    <span className="mt-0.5 inline-block rounded-full bg-indigo-500/15 px-2.5 py-0.5 text-xs font-semibold text-indigo-400">{group.type}</span>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                      <span className="inline-block rounded-full bg-indigo-500/15 px-2.5 py-0.5 text-xs font-semibold text-indigo-400">{group.type}</span>
+                      {group.createdViaScan && (
+                        <span className="inline-block rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-400">Scanned</span>
+                      )}
+                    </div>
                   </div>
                   <ArrowRight className="h-4 w-4 text-slate-600 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />
                 </div>
@@ -541,7 +546,7 @@ function GroupsTab({ onCreateGroup }: { onCreateGroup: () => void }) {
 
 /* ─── Dashboard Page ───────────────────────────── */
 export default function DashboardPage() {
-  const [tab, setTab]                 = useState<Tab>('friends');
+  const [tab, setTab]                 = useState<Tab>('groups');
   const [showCreate, setShowCreate]   = useState(false);
   const [showAddFriend, setShowAddFriend] = useState(false);
 

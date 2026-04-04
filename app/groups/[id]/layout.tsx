@@ -1,8 +1,8 @@
 'use client';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
-import { ArrowLeft, Copy, Check, Zap, BarChart3, Scale, ListTodo, PieChart, Bell, X, CreditCard } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { ArrowLeft, Copy, Check, Zap, BarChart3, Scale, ListTodo, PieChart, Bell, X, CreditCard, Pencil, Loader2 } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { calculateSettlements } from '@/lib/settlement';
 import ChatbotWidget from '@/components/ChatbotWidget';
@@ -20,14 +20,22 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
   const { id } = useParams<{ id: string }>();
   const pathname = usePathname();
   const router = useRouter();
-  const { getGroup, getGroupExpenses, getNetBalances } = useStore();
+  const { getGroup, getGroupExpenses, getNetBalances, updateGroupName } = useStore();
   const [copied, setCopied] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [nameError, setNameError] = useState('');
 
   const group = getGroup(id);
   const base = `/groups/${id}`;
   const expenses = getGroupExpenses(id);
   const netBalances = getNetBalances(id);
+
+  useEffect(() => {
+    setNameDraft(group?.name ?? '');
+  }, [group?.name]);
   
   // MERGED STATE LOGIC
   const members = useMemo(() => group?.members ?? [], [group]);
@@ -80,6 +88,35 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
     } catch {}
   };
 
+  const handleSaveGroupName = async () => {
+    const trimmed = nameDraft.trim();
+    if (!trimmed) {
+      setNameError('Name cannot be empty');
+      return;
+    }
+    if (trimmed === group.name) {
+      setIsEditingName(false);
+      setNameError('');
+      return;
+    }
+    setSavingName(true);
+    setNameError('');
+    try {
+      await updateGroupName(id, trimmed);
+      setIsEditingName(false);
+    } catch (err) {
+      setNameError(err instanceof Error ? err.message : 'Failed to rename group');
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const handleCancelEditName = () => {
+    setIsEditingName(false);
+    setNameDraft(group.name);
+    setNameError('');
+  };
+
   return (
     <div className="min-h-screen bg-[#07070f] text-white">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -94,9 +131,68 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
             </Link>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="truncate text-base font-bold text-white">{group.name}</h1>
+                {isEditingName ? (
+                  <div className="flex items-center gap-2 min-w-0">
+                    <input
+                      value={nameDraft}
+                      onChange={(e) => {
+                        setNameDraft(e.target.value);
+                        if (nameError) setNameError('');
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void handleSaveGroupName();
+                        }
+                        if (e.key === 'Escape') {
+                          e.preventDefault();
+                          handleCancelEditName();
+                        }
+                      }}
+                      disabled={savingName}
+                      className="w-44 sm:w-56 rounded-lg border border-indigo-500/40 bg-white/10 px-2.5 py-1 text-sm font-semibold text-white outline-none focus:border-indigo-400"
+                      maxLength={60}
+                      aria-label="Group name"
+                    />
+                    <button
+                      onClick={() => void handleSaveGroupName()}
+                      disabled={savingName}
+                      className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50"
+                      title="Save group name"
+                    >
+                      {savingName ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    </button>
+                    <button
+                      onClick={handleCancelEditName}
+                      disabled={savingName}
+                      className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 hover:bg-white/15 disabled:opacity-50"
+                      title="Cancel"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <h1 className="truncate text-base font-bold text-white">{group.name}</h1>
+                    <button
+                      onClick={() => {
+                        setIsEditingName(true);
+                        setNameDraft(group.name);
+                        setNameError('');
+                      }}
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+                      title="Edit group name"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                )}
                 <span className="shrink-0 rounded-full bg-indigo-500/15 px-2 py-0.5 text-xs font-semibold text-indigo-400">{group.type}</span>
+                {group.createdViaScan && (
+                  <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-400">Scanned</span>
+                )}
               </div>
+              {nameError && <p className="mt-1 text-[11px] text-rose-400">{nameError}</p>}
             </div>
             <div className="hidden sm:flex items-center gap-1">
               {group.members.slice(0, 5).map(m => (

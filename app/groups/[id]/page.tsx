@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Plus, X, Trash2, UtensilsCrossed, Plane, Home, PartyPopper, ShoppingBag, Zap, Heart, MoreHorizontal, Search, Filter, Sparkles, AlertTriangle, Mic } from 'lucide-react';
 import { useStore, Category, SplitType, Member } from '@/lib/store';
@@ -79,6 +79,7 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
   const [category, setCategory] = useState<Category>('Food');
   const [splitType, setSplitType] = useState<SplitType>('equal');
   const [splits, setSplits] = useState<Record<string, string>>({});
+  const prevSplitTypeRef = useRef<SplitType>('equal');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [nlpMatch, setNlpMatch] = useState<{ amt?: number; cat?: Category; payer?: string }>({});
@@ -98,10 +99,32 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
     } else {
       setSplits(prev => {
         const next: Record<string, string> = {};
-        group.members.forEach(m => { next[m.id] = prev[m.id] ?? '0'; });
+
+        // If user switched from percentage to unequal, convert % to amount so values remain meaningful.
+        if (prevSplitTypeRef.current === 'percentage') {
+          const total = parseFloat(amount) || 0;
+          group.members.forEach(m => {
+            const pct = parseFloat(prev[m.id] || '0');
+            const amt = (pct / 100) * total;
+            next[m.id] = Number.isFinite(amt) ? amt.toFixed(2) : '0';
+          });
+          return next;
+        }
+
+        // Keep unequal values if already editing unequal; otherwise seed with equal currency shares.
+        if (prevSplitTypeRef.current === 'unequal') {
+          group.members.forEach(m => { next[m.id] = prev[m.id] ?? '0'; });
+          return next;
+        }
+
+        const total = parseFloat(amount) || 0;
+        const share = group.members.length > 0 ? total / group.members.length : 0;
+        group.members.forEach(m => { next[m.id] = Number.isFinite(share) ? share.toFixed(2) : '0'; });
         return next;
       });
     }
+
+    prevSplitTypeRef.current = splitType;
   }, [amount, splitType, group.members]);
 
   const handleDescChange = (val: string) => {

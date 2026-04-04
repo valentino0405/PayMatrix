@@ -8,6 +8,7 @@ export interface IGroup extends Document {
   name: string; type: GroupType;
   members: IMember[]; inviteCode: string;
   monthlyBudget?: number;
+  createdViaScan?: boolean;
   ownerClerkId: string; createdAt: Date; updatedAt: Date;
 }
 
@@ -22,6 +23,7 @@ const GroupSchema = new Schema<IGroup>({
   members:      { type: [MemberSchema], default: [] },
   inviteCode:   { type: String, required: true, unique: true },
   monthlyBudget:{ type: Number, required: false },
+  createdViaScan: { type: Boolean, default: false },
   ownerClerkId: { type: String, required: true, index: true },
 }, { timestamps: true });
 

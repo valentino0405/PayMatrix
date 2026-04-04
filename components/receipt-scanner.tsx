@@ -4,10 +4,12 @@ import { useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Tesseract from 'tesseract.js';
+import { GroupType, SplitType, useStore } from '@/lib/store';
 import {
   CheckCircle2,
   FileImage,
   Loader2,
+  Plus,
   ScanLine,
   Upload,
   X,
@@ -20,6 +22,8 @@ interface ParsedReceipt {
   description: string;
 }
 
+const GROUP_TYPES: GroupType[] = ['Trip', 'Roommates', 'Event', 'Other'];
+
 /* ─── Helpers ────────────────────────────────────────────── */
 function parseReceiptText(text: string): ParsedReceipt {
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
@@ -27,15 +31,14 @@ function parseReceiptText(text: string): ParsedReceipt {
   /* Amount — look for "total / grand total / amount due" near a $ value */
   let amount = '';
   const amountPatterns = [
-    /(?:grand\s+total|total\s+amount|amount\s+due|total)[^\d]*(\$?\s*[\d,]+\.?\d{0,2})/i,
-    /\$\s*([\d,]+\.?\d{0,2})/i,
+    /(?:grand\s+total|total\s+amount|amount\s+due|total)[^\d]*(?:₹|rs\.?|inr|\$)?\s*([\d,]+\.?\d{0,2})/i,
+    /(?:₹|rs\.?|inr|\$)\s*([\d,]+\.?\d{0,2})/i,
     /([\d,]+\.\d{2})/,
   ];
   for (const pat of amountPatterns) {
     const m = text.match(pat);
     if (m) {
       amount = m[1].replace(/,/g, '').trim();
-      if (!amount.startsWith('$')) amount = `$${amount}`;
       break;
     }
   }
@@ -63,6 +66,7 @@ function parseReceiptText(text: string): ParsedReceipt {
 /* ─── Component ───────────────────────────────────────────── */
 export default function ReceiptScanner() {
   const router = useRouter();
+  const { groups, addExpense, addGroup } = useStore();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [preview, setPreview] = useState<string | null>(null);
@@ -74,6 +78,34 @@ export default function ReceiptScanner() {
   const [parsed, setParsed] = useState<ParsedReceipt | null>(null);
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState('');
+  const [selectedPayerId, setSelectedPayerId] = useState('');
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [splitType, setSplitType] = useState<SplitType>('equal');
+  const [splitInputs, setSplitInputs] = useState<Record<string, string>>({});
+  const [amountInput, setAmountInput] = useState('');
+  const [descriptionInput, setDescriptionInput] = useState('');
+  const [savingExpense, setSavingExpense] = useState(false);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupType, setNewGroupType] = useState<GroupType>('Other');
+  const [newMembers, setNewMembers] = useState([{ name: '' }, { name: '' }]);
+
+  const selectedGroup = groups.find((g) => g.id === selectedGroupId);
+
+  const getDefaultSplitInputs = (memberIds: string[], mode: SplitType, amount: number) => {
+    const next: Record<string, string> = {};
+    if (memberIds.length === 0 || mode === 'equal') return next;
+    if (mode === 'percentage') {
+      const eachPct = (100 / memberIds.length).toFixed(2);
+      memberIds.forEach((id) => { next[id] = eachPct; });
+      return next;
+    }
+    const eachAmt = (amount / memberIds.length).toFixed(2);
+    memberIds.forEach((id) => { next[id] = eachAmt; });
+    return next;
+  };
 
   /* ── file handling ── */
   const loadFile = (file: File) => {
@@ -123,8 +155,11 @@ export default function ReceiptScanner() {
         },
       });
       const text = result.data.text;
+      const parsedResult = parseReceiptText(text);
       setRawText(text);
-      setParsed(parseReceiptText(text));
+      setParsed(parsedResult);
+      setAmountInput(parsedResult.amount);
+      setDescriptionInput(parsedResult.description);
       setProgress(100);
       setProgressLabel('Done!');
     } catch (err) {
@@ -134,15 +169,171 @@ export default function ReceiptScanner() {
     }
   };
 
-  /* ── navigate to add-expense ── */
-  const handleUseData = () => {
+  /* ── choose group and setup default split ── */
+  const handleGroupChange = (groupId: string) => {
+    setSelectedGroupId(groupId);
+    const nextGroup = groups.find((g) => g.id === groupId);
+    if (!nextGroup || nextGroup.members.length === 0) {
+      setSelectedPayerId('');
+      setSelectedMemberIds([]);
+      setSplitInputs({});
+      return;
+    }
+    const memberIds = nextGroup.members.map((m) => m.id);
+    const parsedAmount = Number.parseFloat(amountInput) || 0;
+    setSelectedPayerId(nextGroup.members[0].id);
+    setSelectedMemberIds(memberIds);
+    setSplitInputs(getDefaultSplitInputs(memberIds, splitType, parsedAmount));
+  };
+
+  const handleSplitTypeChange = (mode: SplitType) => {
+    const activeMemberIds = selectedMemberIds.length > 0
+      ? selectedMemberIds
+      : (selectedGroup?.members.map((m) => m.id) ?? []);
+    if (activeMemberIds.length > 0 && selectedMemberIds.length === 0) {
+      setSelectedMemberIds(activeMemberIds);
+    }
+    setSplitType(mode);
+    const parsedAmount = Number.parseFloat(amountInput) || 0;
+    setSplitInputs(getDefaultSplitInputs(activeMemberIds, mode, parsedAmount));
+  };
+
+  const handleCreateGroupFromScan = async () => {
+    const validMembers = newMembers.map((m) => ({ name: m.name.trim() })).filter((m) => m.name);
+    if (!newGroupName.trim()) {
+      setError('Enter a name for the new group.');
+      return;
+    }
+    if (validMembers.length < 2) {
+      setError('Add at least 2 members to create a group from scan.');
+      return;
+    }
+    setCreatingGroup(true);
+    setError('');
+    try {
+      const created = await addGroup({
+        name: newGroupName.trim(),
+        type: newGroupType,
+        members: validMembers,
+        createdViaScan: true,
+      });
+      setShowCreateGroup(false);
+      setNewGroupName('');
+      setNewGroupType('Other');
+      setNewMembers([{ name: '' }, { name: '' }]);
+      const memberIds = created.members.map((m) => m.id);
+      const parsedAmount = Number.parseFloat(amountInput) || 0;
+      setSelectedGroupId(created.id);
+      setSelectedPayerId(created.members[0]?.id ?? '');
+      setSelectedMemberIds(memberIds);
+      setSplitInputs(getDefaultSplitInputs(memberIds, splitType, parsedAmount));
+    } catch {
+      setError('Failed to create group from scan.');
+    } finally {
+      setCreatingGroup(false);
+    }
+  };
+
+  /* ── save scanned expense directly to selected group ── */
+  const handleUseData = async () => {
     if (!parsed) return;
-    const params = new URLSearchParams({
-      amount: parsed.amount.replace('$', ''),
-      date: parsed.date,
-      description: parsed.description,
-    });
-    router.push(`/dashboard/add-expense?${params.toString()}`);
+
+    const amount = Number.parseFloat(amountInput);
+    const finalDescription = descriptionInput.trim();
+
+    if (!selectedGroupId) {
+      setError('Select a group to add this expense.');
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Enter a valid amount before saving.');
+      return;
+    }
+    if (!finalDescription) {
+      setError('Description is required.');
+      return;
+    }
+    if (!selectedPayerId) {
+      setError('Select who paid.');
+      return;
+    }
+    const activeMemberIds = selectedMemberIds.length > 0
+      ? selectedMemberIds
+      : (selectedGroup?.members.map((m) => m.id) ?? []);
+
+    if (activeMemberIds.length === 0) {
+      setError('Select at least one member to split with.');
+      return;
+    }
+
+    let splits: { memberId: string; amount: number }[] = [];
+
+    if (splitType === 'equal') {
+      const perPerson = Math.round((amount / activeMemberIds.length) * 100) / 100;
+      splits = activeMemberIds.map((memberId, index) => {
+        if (index === activeMemberIds.length - 1) {
+          const assigned = Math.round((perPerson * (activeMemberIds.length - 1)) * 100) / 100;
+          return { memberId, amount: Math.round((amount - assigned) * 100) / 100 };
+        }
+        return { memberId, amount: perPerson };
+      });
+    } else if (splitType === 'percentage') {
+      const pctValues = activeMemberIds.map((id) => Number.parseFloat(splitInputs[id] || '0'));
+      const pctSum = pctValues.reduce((s, v) => s + v, 0);
+      if (!pctValues.every((v) => Number.isFinite(v) && v >= 0)) {
+        setError('Enter valid percentage values for selected members.');
+        return;
+      }
+      if (Math.abs(pctSum - 100) > 0.5) {
+        setError(`Percentage split must add to 100% (currently ${pctSum.toFixed(1)}%).`);
+        return;
+      }
+      splits = activeMemberIds.map((memberId, index) => {
+        if (index === activeMemberIds.length - 1) {
+          const assigned = activeMemberIds.slice(0, -1).reduce((s, id) => {
+            const pct = Number.parseFloat(splitInputs[id] || '0');
+            return s + (pct / 100) * amount;
+          }, 0);
+          return { memberId, amount: Math.round((amount - assigned) * 100) / 100 };
+        }
+        const pct = Number.parseFloat(splitInputs[memberId] || '0');
+        return { memberId, amount: Math.round(((pct / 100) * amount) * 100) / 100 };
+      });
+    } else {
+      const values = activeMemberIds.map((id) => Number.parseFloat(splitInputs[id] || '0'));
+      const sum = values.reduce((s, v) => s + v, 0);
+      if (!values.every((v) => Number.isFinite(v) && v >= 0)) {
+        setError('Enter valid unequal split amounts.');
+        return;
+      }
+      if (Math.abs(sum - amount) > 0.5) {
+        setError(`Unequal split must add to ₹${amount.toFixed(2)} (currently ₹${sum.toFixed(2)}).`);
+        return;
+      }
+      splits = activeMemberIds.map((memberId) => ({
+        memberId,
+        amount: Math.round((Number.parseFloat(splitInputs[memberId] || '0')) * 100) / 100,
+      }));
+    }
+
+    setSavingExpense(true);
+    setError('');
+    try {
+      await addExpense({
+        groupId: selectedGroupId,
+        description: finalDescription,
+        amount,
+        paidBy: selectedPayerId,
+        splitType,
+        splits,
+        category: 'Other',
+      });
+      router.push(`/groups/${selectedGroupId}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save expense');
+    } finally {
+      setSavingExpense(false);
+    }
   };
 
   /* ── clear ── */
@@ -154,6 +345,18 @@ export default function ReceiptScanner() {
     setProgress(0);
     setProgressLabel('');
     setError('');
+    setAmountInput('');
+    setDescriptionInput('');
+    setSelectedGroupId('');
+    setSelectedPayerId('');
+    setSelectedMemberIds([]);
+    setSplitType('equal');
+    setSplitInputs({});
+    setShowCreateGroup(false);
+    setCreatingGroup(false);
+    setNewGroupName('');
+    setNewGroupType('Other');
+    setNewMembers([{ name: '' }, { name: '' }]);
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -270,9 +473,9 @@ export default function ReceiptScanner() {
           {/* Parsed fields */}
           <div className="grid gap-4 sm:grid-cols-3">
             {[
-              { label: 'Amount', value: parsed.amount, id: 'result-amount' },
+              { label: 'Amount', value: amountInput, id: 'result-amount' },
               { label: 'Date', value: parsed.date, id: 'result-date' },
-              { label: 'Description', value: parsed.description, id: 'result-description' },
+              { label: 'Description', value: descriptionInput, id: 'result-description' },
             ].map(({ label, value, id }) => (
               <div key={label} className="rounded-xl bg-slate-50 px-4 py-3">
                 <p className="text-xs font-medium uppercase tracking-wider text-slate-400">{label}</p>
@@ -282,6 +485,217 @@ export default function ReceiptScanner() {
               </div>
             ))}
           </div>
+
+          {/* Editable fields + group binding */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="space-y-1">
+              <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Amount (INR)</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={amountInput}
+                onChange={(e) => setAmountInput(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Group</span>
+              <select
+                value={selectedGroupId}
+                onChange={(e) => handleGroupChange(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+              >
+                <option value="">Select a group</option>
+                {groups.map((group) => (
+                  <option key={group.id} value={group.id}>{group.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <button
+              type="button"
+              onClick={() => setShowCreateGroup((v) => !v)}
+              className="text-sm font-semibold text-indigo-600 hover:text-indigo-500"
+            >
+              {showCreateGroup ? 'Hide quick create group' : 'No matching group? Create one from Scan'}
+            </button>
+
+            {showCreateGroup && (
+              <div className="mt-3 space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1">
+                    <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Group name</span>
+                    <input
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+                      placeholder="e.g. Office Lunch"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Type</span>
+                    <select
+                      value={newGroupType}
+                      onChange={(e) => setNewGroupType(e.target.value as GroupType)}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+                    >
+                      {GROUP_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </label>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Members (min 2)</p>
+                  {newMembers.map((m, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input
+                        value={m.name}
+                        onChange={(e) => setNewMembers((prev) => prev.map((x, idx) => idx === i ? { ...x, name: e.target.value } : x))}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+                        placeholder={`Member ${i + 1} name`}
+                      />
+                      {newMembers.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => setNewMembers((prev) => prev.filter((_, idx) => idx !== i))}
+                          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 hover:text-rose-500"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewMembers((prev) => [...prev, { name: '' }])}
+                    className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add member
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateGroupFromScan()}
+                    disabled={creatingGroup}
+                    className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-500 disabled:opacity-70"
+                  >
+                    {creatingGroup ? 'Creating...' : 'Create Group & Select'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <label className="space-y-1 block">
+            <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Description</span>
+            <input
+              type="text"
+              value={descriptionInput}
+              onChange={(e) => setDescriptionInput(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+            />
+          </label>
+
+          {selectedGroup && (
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <label className="space-y-1 block">
+                <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Paid by</span>
+                <select
+                  value={selectedPayerId}
+                  onChange={(e) => setSelectedPayerId(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+                >
+                  {selectedGroup.members.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Split mode</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['equal', 'unequal', 'percentage'] as SplitType[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => handleSplitTypeChange(mode)}
+                      className={`rounded-lg border px-2 py-2 text-xs font-semibold capitalize transition-all ${splitType === mode ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-100'}`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Split members</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {selectedGroup.members.map((m) => {
+                    const checked = selectedMemberIds.includes(m.id);
+                    return (
+                      <label key={m.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedMemberIds((prev) => {
+                                const next = [...prev, m.id];
+                                const parsedAmount = Number.parseFloat(amountInput) || 0;
+                                if (splitType !== 'equal') {
+                                  setSplitInputs(getDefaultSplitInputs(next, splitType, parsedAmount));
+                                }
+                                return next;
+                              });
+                            } else {
+                              setSelectedMemberIds((prev) => {
+                                const next = prev.filter((id) => id !== m.id);
+                                const parsedAmount = Number.parseFloat(amountInput) || 0;
+                                if (splitType !== 'equal') {
+                                  setSplitInputs(getDefaultSplitInputs(next, splitType, parsedAmount));
+                                }
+                                return next;
+                              });
+                            }
+                          }}
+                        />
+                        <span>{m.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {splitType !== 'equal' && selectedMemberIds.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                    {splitType === 'percentage' ? 'Percentage per member' : 'Amount per member'}
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {selectedGroup.members.filter((m) => selectedMemberIds.includes(m.id)).map((m) => (
+                      <label key={m.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                        <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={splitInputs[m.id] ?? ''}
+                          onChange={(e) => setSplitInputs((prev) => ({ ...prev, [m.id]: e.target.value }))}
+                          className="w-24 rounded-md border border-slate-300 px-2 py-1 text-right text-xs outline-none focus:border-indigo-400"
+                        />
+                        <span className="text-xs text-slate-500">{splitType === 'percentage' ? '%' : 'INR'}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Raw text collapsible */}
           <details className="text-sm">
@@ -299,9 +713,10 @@ export default function ReceiptScanner() {
               id="receipt-use-data-btn"
               type="button"
               onClick={handleUseData}
-              className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 active:scale-[0.98]"
+              disabled={savingExpense}
+              className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              Use This Data → Add Expense
+              {savingExpense ? 'Saving...' : 'Use This Data → Add Expense'}
             </button>
             <button
               id="receipt-rescan-btn"

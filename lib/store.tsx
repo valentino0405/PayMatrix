@@ -1,5 +1,6 @@
 'use client';
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { useAuth } from '@clerk/nextjs';
 
 export type GroupType = 'Trip' | 'Roommates' | 'Event' | 'Other';
 export type SplitType = 'equal' | 'unequal' | 'percentage';
@@ -34,10 +35,12 @@ export interface PaymentTxn {
 }
 export interface Group {
   id: string; name: string; type: GroupType;
-  members: Member[]; inviteCode: string; monthlyBudget?: number; createdAt: string;
+  members: Member[]; inviteCode: string; monthlyBudget?: number; createdViaScan?: boolean; createdAt: string;
 }
 
 export const MEMBER_COLORS = ['#6366f1','#ec4899','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ef4444','#06b6d4','#84cc16','#f97316'];
+
+const isJsonResponse = (res: Response) => (res.headers.get('content-type') ?? '').includes('application/json');
 
 // Normalize MongoDB _id → id
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -48,6 +51,7 @@ const ng = (g: any): Group => ({
   members: (g.members ?? []).map((m: Member) => ({ ...m })),
   inviteCode: g.inviteCode,
   monthlyBudget: g.monthlyBudget,
+  createdViaScan: Boolean(g.createdViaScan),
   createdAt: g.createdAt,
 });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -66,7 +70,8 @@ const ne = (e: any): Expense => ({
 
 interface StoreCtx {
   groups: Group[]; expenses: Expense[]; friends: Friend[]; loading: boolean; friendsLoading: boolean;
-  addGroup: (d: { name: string; type: GroupType; members: { name: string; email?: string }[] }) => Promise<Group>;
+  addGroup: (d: { name: string; type: GroupType; members: { name: string; email?: string }[]; createdViaScan?: boolean }) => Promise<Group>;
+  updateGroupName: (groupId: string, name: string) => Promise<void>;
   updateGroupBudget: (groupId: string, budget: number | undefined) => Promise<void>;
   addMember: (groupId: string, name: string) => Promise<void>;
   removeMember: (groupId: string, memberId: string) => Promise<void>;
@@ -90,6 +95,7 @@ interface StoreCtx {
 const Ctx = createContext<StoreCtx | null>(null);
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
+  const { isLoaded, isSignedIn } = useAuth();
   const [groups, setGroups]     = useState<Group[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -100,10 +106,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   // ── Core fetch: load all groups + all their expenses ────────────────────────
   const refreshGroups = useCallback(async () => {
+    if (!isLoaded || !isSignedIn) {
+      setGroups([]);
+      setExpenses([]);
+      setSettlements([]);
+      setPayments([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const res = await fetch('/api/groups');
-      if (!res.ok) { setGroups([]); setExpenses([]); return; }
+      if (!res.ok || !isJsonResponse(res)) {
+        setGroups([]);
+        setExpenses([]);
+        setSettlements([]);
+        setPayments([]);
+        return;
+      }
 
       const rawGroups = await res.json();
       const gs: Group[] = rawGroups.map(ng);
@@ -116,7 +137,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         gs.map(async (g) => {
           try {
             const r = await fetch(`/api/groups/${g.id}/expenses`);
-            if (!r.ok) return [];
+            if (!r.ok || !isJsonResponse(r)) return [];
             const raw = await r.json();
             return Array.isArray(raw) ? raw.map(ne) : [];
           } catch { return []; }
@@ -128,39 +149,59 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
       // Load settlements for all groups in parallel
       const allSettlements = await Promise.all(
-        gs.map(g => fetch(`/api/groups/${g.id}/settlements`).then(r => r.ok ? r.json() : []).then(arr => arr.map((s: any) => ({ ...s, groupId: g.id }))))
+        gs.map(g =>
+          fetch(`/api/groups/${g.id}/settlements`)
+            .then(r => (r.ok && isJsonResponse(r) ? r.json() : []))
+            .then(arr => arr.map((s: any) => ({ ...s, groupId: g.id })))
+        )
       );
       setSettlements(allSettlements.flat());
 
       // Load successful payments for all groups
       const allPayments = await Promise.all(
-        gs.map(g => fetch(`/api/groups/${g.id}/payments?status=success`).then(r => r.ok ? r.json() : []).then(arr => arr.map((p: any) => ({ ...p, groupId: g.id }))))
+        gs.map(g =>
+          fetch(`/api/groups/${g.id}/payments?status=success`)
+            .then(r => (r.ok && isJsonResponse(r) ? r.json() : []))
+            .then(arr => arr.map((p: any) => ({ ...p, groupId: g.id })))
+        )
       );
       setPayments(allPayments.flat());
     } catch (err) { 
       console.error('refreshGroups error:', err); 
     }
     finally { setLoading(false); }
-  }, []);
+  }, [isLoaded, isSignedIn]);
 
-  useEffect(() => { refreshGroups(); }, [refreshGroups]);
+  useEffect(() => {
+    if (!isLoaded) return;
+    refreshGroups();
+  }, [isLoaded, refreshGroups]);
 
   /* ── Friends (MongoDB) ────────────────────────────────────────────── */
   const refreshFriends = useCallback(async () => {
+    if (!isLoaded || !isSignedIn) {
+      setFriends([]);
+      setFriendsLoading(false);
+      return;
+    }
+
     try {
       setFriendsLoading(true);
       const res = await fetch('/api/friends');
-      if (!res.ok) { setFriends([]); return; }
+      if (!res.ok || !isJsonResponse(res)) { setFriends([]); return; }
       const raw = await res.json();
       setFriends(Array.isArray(raw) ? raw : []);
     } catch (err) { console.error('refreshFriends:', err); }
     finally { setFriendsLoading(false); }
-  }, []);
+  }, [isLoaded, isSignedIn]);
 
-  useEffect(() => { refreshFriends(); }, [refreshFriends]);
+  useEffect(() => {
+    if (!isLoaded) return;
+    refreshFriends();
+  }, [isLoaded, refreshFriends]);
 
   // ── addGroup ─────────────────────────────────────────────────────────────────
-  const addGroup = useCallback(async (d: { name: string; type: GroupType; members: { name: string; email?: string }[] }): Promise<Group> => {
+  const addGroup = useCallback(async (d: { name: string; type: GroupType; members: { name: string; email?: string }[]; createdViaScan?: boolean }): Promise<Group> => {
     const res = await fetch('/api/groups', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d),
     });
@@ -169,6 +210,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const g = ng(raw);
     setGroups(p => [g, ...p]);
     return g;
+  }, []);
+
+  // ── updateGroupName ─────────────────────────────────────────────────────────
+  const updateGroupName = useCallback(async (groupId: string, name: string) => {
+    const trimmedName = name.trim();
+    if (!trimmedName) throw new Error('Group name cannot be empty');
+    try {
+      const res = await fetch(`/api/groups/${groupId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmedName }),
+      });
+      if (!res.ok) throw new Error();
+      setGroups(p => p.map(g => g.id === groupId ? { ...g, name: trimmedName } : g));
+    } catch {
+      throw new Error('Failed to update group name');
+    }
   }, []);
 
   // ── addMember ────────────────────────────────────────────────────────────────
@@ -332,7 +390,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   return (
     <Ctx.Provider value={{
       groups, expenses, friends, loading, friendsLoading,
-      addGroup, addMember, removeMember, updateGroupBudget, addExpense, deleteExpense,
+      addGroup, updateGroupName, addMember, removeMember, updateGroupBudget, addExpense, deleteExpense,
       getGroup, getGroupExpenses, getGroupSettlements, getGroupPayments, getNetBalances, refreshGroups, refreshFriends,
       addFriend, inviteFriend, settleFriend, unsettleFriend, updateFriendBalance,
     }}>
