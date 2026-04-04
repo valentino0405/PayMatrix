@@ -294,8 +294,9 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
 
 /* ─── Friend Card ──────────────────────────────── */
 function FriendCard({ friend }: { friend: Friend }) {
-  const { settleFriend, unsettleFriend } = useStore();
+  const { settleFriend, unsettleFriend, deleteFriend } = useStore();
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const isPending = friend.status === 'pending';
   const owes = friend.balance < 0;
 
@@ -308,6 +309,19 @@ function FriendCard({ friend }: { friend: Friend }) {
     setLoading(true);
     await unsettleFriend(friend.id);
     setLoading(false);
+  };
+
+  const handleDelete = async () => {
+    const label = isPending ? 'cancel this pending invite' : `remove ${friend.name} from your friends`;
+    if (!window.confirm(`Are you sure you want to ${label}?`)) return;
+    setDeleting(true);
+    try {
+      await deleteFriend(friend.id);
+    } catch {
+      alert('Could not remove this friend right now. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -346,19 +360,31 @@ function FriendCard({ friend }: { friend: Friend }) {
         </div>
       )}
 
-      {!isPending && (
-        friend.settled ? (
-          <button onClick={handleUnsettle} disabled={loading} title="Mark unsettled"
-            className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300 transition-colors disabled:opacity-50">
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-          </button>
-        ) : (
-          <button onClick={handleSettle} disabled={loading} title="Mark as settled"
-            className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50">
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-          </button>
-        )
-      )}
+      <div className="flex items-center gap-2">
+        {!isPending && (
+          friend.settled ? (
+            <button onClick={handleUnsettle} disabled={loading || deleting} title="Mark unsettled"
+              className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300 transition-colors disabled:opacity-50">
+              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+            </button>
+          ) : (
+            <button onClick={handleSettle} disabled={loading || deleting} title="Mark as settled"
+              className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50">
+              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+            </button>
+          )
+        )}
+
+        <button
+          onClick={handleDelete}
+          disabled={deleting || loading}
+          title={isPending ? 'Cancel invite' : 'Remove friend'}
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1.5 text-rose-400 hover:bg-rose-500/20 transition-colors disabled:opacity-50"
+        >
+          {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+          <span className="text-[11px] font-semibold sm:hidden">Remove</span>
+        </button>
+      </div>
     </div>
   );
 }

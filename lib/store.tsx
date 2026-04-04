@@ -91,6 +91,7 @@ interface StoreCtx {
   settleFriend: (id: string) => Promise<void>;
   unsettleFriend: (id: string) => Promise<void>;
   updateFriendBalance: (id: string, balance: number) => Promise<void>;
+  deleteFriend: (id: string) => Promise<void>;
 }
 
 const Ctx = createContext<StoreCtx | null>(null);
@@ -400,13 +401,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setFriends(p => p.map(f => f.id === id ? { ...f, balance, settled: false } : f));
   }, []);
 
+  const deleteFriend = useCallback(async (id: string) => {
+    const res = await fetch(`/api/friends/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      throw new Error('Failed to delete friend');
+    }
+    setFriends(p => p.filter(f => f.id !== id));
+  }, []);
+
   // RESOLVED CONFLICT: Cleanly exporting ALL combined functions
   return (
     <Ctx.Provider value={{
       groups, expenses, friends, loading, friendsLoading,
       addGroup, deleteGroup, updateGroupName, addMember, removeMember, updateGroupBudget, addExpense, deleteExpense,
       getGroup, getGroupExpenses, getGroupSettlements, getGroupPayments, getNetBalances, refreshGroups, refreshFriends,
-      addFriend, inviteFriend, settleFriend, unsettleFriend, updateFriendBalance,
+      addFriend, inviteFriend, settleFriend, unsettleFriend, updateFriendBalance, deleteFriend,
     }}>
       {children}
     </Ctx.Provider>
