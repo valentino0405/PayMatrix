@@ -7,6 +7,7 @@ export interface IMember { id: string; name: string; color: string; email?: stri
 export interface IGroup extends Document {
   name: string; type: GroupType;
   members: IMember[]; inviteCode: string;
+  monthlyBudget?: number;
   ownerClerkId: string; createdAt: Date; updatedAt: Date;
 }
 
@@ -20,6 +21,7 @@ const GroupSchema = new Schema<IGroup>({
   type:         { type: String, enum: ['Trip','Roommates','Event','Other'], default: 'Other' },
   members:      { type: [MemberSchema], default: [] },
   inviteCode:   { type: String, required: true, unique: true },
+  monthlyBudget:{ type: Number, required: false },
   ownerClerkId: { type: String, required: true, index: true },
 }, { timestamps: true });
 

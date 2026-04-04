@@ -1,8 +1,16 @@
 'use client';
 import { useState, useMemo, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { Plus, X, Trash2, UtensilsCrossed, Plane, Home, PartyPopper, ShoppingBag, Zap, Heart, MoreHorizontal, Search, Filter, Sparkles, AlertTriangle } from 'lucide-react';
+import { Plus, X, Trash2, UtensilsCrossed, Plane, Home, PartyPopper, ShoppingBag, Zap, Heart, MoreHorizontal, Search, Filter, Sparkles, AlertTriangle, Mic } from 'lucide-react';
 import { useStore, Category, SplitType, Member } from '@/lib/store';
+
+// Allow SpeechRecognition types
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
 
 const CATEGORY_META: Record<Category, { icon: React.ElementType; emoji: string; color: string }> = {
   Food:          { icon: UtensilsCrossed, emoji: '🍕', color: '#f59e0b' },
@@ -74,6 +82,7 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [nlpMatch, setNlpMatch] = useState<{ amt?: number; cat?: Category; payer?: string }>({});
+  const [isListening, setIsListening] = useState(false);
 
   useEffect(() => {
     if (splitType === 'equal') {
@@ -106,6 +115,28 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
     
     // Store match separately for UI highlight
     setNlpMatch({ amt: parsed.amount, cat: parsed.category, payer: parsed.paidByName });
+  };
+
+  const startListening = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return alert('Voice input is not supported in your browser.');
+    
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-IN';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setIsListening(true);
+    
+    recognition.onresult = (event: any) => {
+      const speechResult = event.results[0][0].transcript;
+      handleDescChange(speechResult);
+    };
+
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+    
+    recognition.start();
   };
 
   const validate = (): boolean => {
@@ -159,9 +190,19 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Description & Smart Input</label>
-            <input autoFocus value={desc} onChange={e => handleDescChange(e.target.value)}
-              placeholder='e.g. "Lunch at Taj by Alex for 500"'
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 transition-all text-sm" />
+            <div className="relative">
+              <input autoFocus value={desc} onChange={e => handleDescChange(e.target.value)}
+                placeholder='e.g. "Lunch at Taj by Alex for 500"'
+                className="w-full rounded-xl border border-white/10 bg-white/5 pl-4 pr-12 py-3 text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 transition-all text-sm" />
+              <button 
+                type="button" 
+                onClick={startListening}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-lg transition-all ${isListening ? 'bg-rose-500/20 text-rose-400 animate-pulse' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                title="Speak expense details"
+              >
+                <Mic className="h-4 w-4" />
+              </button>
+            </div>
             
             {/* NLP Smart Extraction UI */}
             {desc.trim() && (nlpMatch.amt || nlpMatch.cat || nlpMatch.payer) ? (

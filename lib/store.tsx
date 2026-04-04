@@ -14,7 +14,7 @@ export interface Expense {
 }
 export interface Group {
   id: string; name: string; type: GroupType;
-  members: Member[]; inviteCode: string; createdAt: string;
+  members: Member[]; inviteCode: string; monthlyBudget?: number; createdAt: string;
 }
 
 export const MEMBER_COLORS = ['#6366f1','#ec4899','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ef4444','#06b6d4','#84cc16','#f97316'];
@@ -27,6 +27,7 @@ const ng = (g: any): Group => ({
   type: g.type,
   members: (g.members ?? []).map((m: Member) => ({ ...m })),
   inviteCode: g.inviteCode,
+  monthlyBudget: g.monthlyBudget,
   createdAt: g.createdAt,
 });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -46,6 +47,7 @@ const ne = (e: any): Expense => ({
 interface StoreCtx {
   groups: Group[]; expenses: Expense[]; loading: boolean;
   addGroup: (d: { name: string; type: GroupType; members: { name: string; email?: string }[] }) => Promise<Group>;
+  updateGroupBudget: (groupId: string, budget: number | undefined) => Promise<void>;
   addMember: (groupId: string, name: string) => Promise<void>;
   removeMember: (groupId: string, memberId: string) => Promise<void>;
   addExpense: (e: Omit<Expense, 'id' | 'createdAt'>) => Promise<void>;
@@ -142,6 +144,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, [groups]);
 
+  // ── updateGroupBudget ────────────────────────────────────────────────────────
+  const updateGroupBudget = useCallback(async (groupId: string, budget: number | undefined) => {
+    try {
+      const res = await fetch(`/api/groups/${groupId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monthlyBudget: budget === undefined ? null : budget }),
+      });
+      if (!res.ok) throw new Error();
+      setGroups(p => p.map(g => g.id === groupId ? { ...g, monthlyBudget: budget } : g));
+    } catch { throw new Error('Failed to update group budget'); }
+  }, []);
+
   // ── addExpense — write to DB, then RE-FETCH to get the real stored data ──────
   const addExpense = useCallback(async (expense: Omit<Expense, 'id' | 'createdAt'>) => {
     const res = await fetch(`/api/groups/${expense.groupId}/expenses`, {
@@ -187,7 +202,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   return (
     <Ctx.Provider value={{
       groups, expenses, loading,
-      addGroup, addMember, removeMember, addExpense, deleteExpense,
+      addGroup, addMember, removeMember, updateGroupBudget, addExpense, deleteExpense,
       getGroup, getGroupExpenses, getNetBalances, refreshGroups,
     }}>
       {children}

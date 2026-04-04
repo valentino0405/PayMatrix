@@ -38,3 +38,15 @@ export async function DELETE(_: NextRequest, { params }: Ctx) {
   await Expense.deleteMany({ groupId: id });
   return NextResponse.json({ ok: true });
 }
+
+// PATCH — partial updates
+export async function PATCH(req: NextRequest, { params }: Ctx) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { id } = await params;
+  const body = await req.json();
+  await connectDB();
+  const group = await Group.findByIdAndUpdate(id, { $set: body }, { new: true });
+  if (!group) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  return NextResponse.json(group);
+}

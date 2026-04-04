@@ -23,15 +23,17 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
   const [showNotif, setShowNotif] = useState(false);
 
   const group = getGroup(id);
-  if (!group) { router.replace('/dashboard'); return null; }
-
   const base = `/groups/${id}`;
   const expenses = getGroupExpenses(id);
   const netBalances = getNetBalances(id);
-  const settlements = calculateSettlements(netBalances, group.members);
+  
+  const settlements = useMemo(() => {
+    return group ? calculateSettlements(netBalances, group.members) : [];
+  }, [group, netBalances]);
 
   // ── Build notifications ─────────────────────────────────────────────────────
   const notifications = useMemo(() => {
+    if (!group) return [];
     const notifs: { id: string; type: 'debt' | 'expense'; text: string; sub: string }[] = [];
 
     // Debt notifications
@@ -59,14 +61,17 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
     });
 
     return notifs;
-  }, [settlements, expenses, group.members]);
+  }, [settlements, expenses, group]);
 
   const handleCopyInvite = async () => {
+    if (!group) return;
     try {
       await navigator.clipboard.writeText(`Join my group "${group.name}" on PayMatrix! Code: ${group.inviteCode}`);
       setCopied(true); setTimeout(() => setCopied(false), 2000);
     } catch {}
   };
+
+  if (!group) return null;
 
   return (
     <div className="min-h-screen bg-[#07070f] text-white">
