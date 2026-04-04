@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { ScanLine } from 'lucide-react';
 import ReceiptScanner from '@/components/receipt-scanner';
 
@@ -10,12 +11,13 @@ export default function ScanPage() {
   return (
     <main className="min-h-screen bg-[#07070f] text-white">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 left-1/4 h-[500px] w-[500px] rounded-full bg-indigo-700/15 blur-[120px]" />
-        <div className="absolute bottom-0 right-1/4 h-[400px] w-[400px] rounded-full bg-violet-700/10 blur-[120px]" />
+        <div className="absolute -top-32 left-1/4 h-125 w-125 rounded-full bg-indigo-700/15 blur-[120px]" />
+        <div className="absolute bottom-0 right-1/4 h-100 w-100 rounded-full bg-violet-700/10 blur-[120px]" />
       </div>
       {/* Header */}
       <div className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#07070f]/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-5 sm:px-8">
+        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-3 px-5 sm:px-8">
+          <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-400">
             <ScanLine className="h-4 w-4" />
           </div>
@@ -23,6 +25,13 @@ export default function ScanPage() {
             <h1 className="text-sm font-semibold text-white">Receipt Scanner</h1>
             <p className="text-xs text-slate-500">Powered by Tesseract OCR</p>
           </div>
+          </div>
+          <Link
+            href="/dashboard"
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300 transition-all hover:bg-white/10 hover:text-white"
+          >
+            Back to Dashboard
+          </Link>
         </div>
       </div>
 
