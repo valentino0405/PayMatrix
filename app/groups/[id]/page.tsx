@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Plus, X, Trash2, UtensilsCrossed, Plane, Home, PartyPopper, ShoppingBag, Zap, Heart, MoreHorizontal, Search, Filter } from 'lucide-react';
 import { useStore, Category, SplitType } from '@/lib/store';
@@ -139,7 +139,7 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
             <input autoFocus value={desc} onChange={e => handleDescChange(e.target.value)}
               placeholder='e.g. "Lunch at Taj" or "paid 500 food"'
               className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 transition-all text-sm" />
-            <p className="mt-1 text-xs text-slate-600">💡 Try "paid 500 for food" — AI auto-fills details</p>
+            <p className="mt-1 text-xs text-slate-600">💡 Try &quot;paid 500 for food&quot; - AI auto-fills details</p>
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Amount (₹)</label>
@@ -163,7 +163,7 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
             <div className="grid grid-cols-4 gap-1.5">
               {CATEGORIES.map(c => (
                 <button key={c} type="button" onClick={() => setCategory(c)}
-                  className={`rounded-xl py-2 text-xs font-semibold transition-all border flex flex-col items-center gap-0.5 ${category === c ? 'border-white/30 bg-white/10 text-white' : 'border-white/[0.06] bg-white/[0.03] text-slate-400 hover:bg-white/[0.07]'}`}>
+                  className={`rounded-xl py-2 text-xs font-semibold transition-all border flex flex-col items-center gap-0.5 ${category === c ? 'border-white/30 bg-white/10 text-white' : 'border-white/6 bg-white/3 text-slate-400 hover:bg-white/[0.07]'}`}>
                   <span className="text-base">{CATEGORY_META[c].emoji}</span>
                   <span className="truncate">{c}</span>
                 </button>
@@ -240,16 +240,14 @@ export default function GroupExpensesPage() {
   const totalAmount = expenses.reduce((s, e) => s + e.amount, 0);
 
   // ── Filtering ──────────────────────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    return [...expenses]
-      .filter(e => {
-        if (search && !e.description.toLowerCase().includes(search.toLowerCase())) return false;
-        if (filterCategory !== 'All' && e.category !== filterCategory) return false;
-        if (filterMember !== 'All' && e.paidBy !== filterMember) return false;
-        return true;
-      })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [expenses, search, filterCategory, filterMember]);
+  const filtered = [...expenses]
+    .filter(e => {
+      if (search && !e.description.toLowerCase().includes(search.toLowerCase())) return false;
+      if (filterCategory !== 'All' && e.category !== filterCategory) return false;
+      if (filterMember !== 'All' && e.paidBy !== filterMember) return false;
+      return true;
+    })
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const getMember = (mid: string) => group.members.find(m => m.id === mid);
   const activeFilters = [filterCategory !== 'All', filterMember !== 'All', search !== ''].filter(Boolean).length;
@@ -264,7 +262,7 @@ export default function GroupExpensesPage() {
             { label: 'Transactions', value: expenses.length },
             { label: 'Members', value: group.members.length },
           ].map(s => (
-            <div key={s.label} className="rounded-xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 flex-1 min-w-[120px]">
+            <div key={s.label} className="rounded-xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 flex-1 min-w-30">
               <div className="text-xs text-slate-500 mb-0.5">{s.label}</div>
               <div className="text-lg font-extrabold text-white">{s.value}</div>
             </div>
@@ -291,7 +289,7 @@ export default function GroupExpensesPage() {
           </div>
 
           {showFilters && (
-            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4 space-y-3">
+            <div className="rounded-2xl border border-white/[0.07] bg-white/3 p-4 space-y-3">
               {/* Category filter */}
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Category</label>
@@ -344,7 +342,7 @@ export default function GroupExpensesPage() {
             const payer = getMember(expense.paidBy);
             const cat = CATEGORY_META[expense.category];
             return (
-              <div key={expense.id} className="group relative rounded-2xl border border-white/[0.07] bg-white/[0.035] p-4 transition-all hover:border-white/15 hover:bg-white/[0.05]">
+              <div key={expense.id} className="group relative rounded-2xl border border-white/[0.07] bg-white/[0.035] p-4 transition-all hover:border-white/15 hover:bg-white/5">
                 <div className="flex items-start gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl" style={{ backgroundColor: cat.color + '20' }}>{cat.emoji}</div>
                   <div className="flex-1 min-w-0">

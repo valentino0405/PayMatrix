@@ -1,12 +1,29 @@
 'use client';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { TrendingUp, TrendingDown, Minus, Zap } from 'lucide-react';
 import { useStore } from '@/lib/store';
 
+interface PaymentRow {
+  from: string;
+  to: string;
+  amount: number;
+  status: 'initiated' | 'processing' | 'success' | 'failed';
+}
+
 export default function BalancesPage() {
   const { id } = useParams<{ id: string }>();
   const { getGroup, getNetBalances } = useStore();
+  const [successPayments, setSuccessPayments] = useState<PaymentRow[]>([]);
+
+  useEffect(() => {
+    fetch(`/api/groups/${id}/payments?status=success`)
+      .then(r => (r.ok ? r.json() : []))
+      .then((rows: PaymentRow[]) => setSuccessPayments(Array.isArray(rows) ? rows : []))
+      .catch(() => setSuccessPayments([]));
+  }, [id]);
+
   const group = getGroup(id);
   if (!group) return null;
 
@@ -18,6 +35,15 @@ export default function BalancesPage() {
   const totalOwed = entries.filter(e => e.net > 0.01).reduce((s, e) => s + e.net, 0);
   const totalOwing = entries.filter(e => e.net < -0.01).reduce((s, e) => s + Math.abs(e.net), 0);
   const settled = entries.filter(e => Math.abs(e.net) <= 0.01).length;
+
+  const paidByMember = successPayments.reduce<Record<string, number>>((acc, p) => {
+    acc[p.from] = (acc[p.from] || 0) + p.amount;
+    return acc;
+  }, {});
+  const receivedByMember = successPayments.reduce<Record<string, number>>((acc, p) => {
+    acc[p.to] = (acc[p.to] || 0) + p.amount;
+    return acc;
+  }, {});
 
   return (
     <div>
@@ -50,9 +76,9 @@ export default function BalancesPage() {
             <div
               key={member.id}
               className={`flex items-center gap-4 rounded-2xl border p-4 transition-all ${
-                isPositive ? 'border-emerald-500/20 bg-emerald-500/[0.05]' :
-                isNegative ? 'border-rose-500/20 bg-rose-500/[0.05]' :
-                'border-white/[0.07] bg-white/[0.02]'
+                isPositive ? 'border-emerald-500/20 bg-emerald-500/5' :
+                isNegative ? 'border-rose-500/20 bg-rose-500/5' :
+                'border-white/[0.07] bg-white/2'
               }`}
             >
               <div
@@ -68,6 +94,13 @@ export default function BalancesPage() {
                    isNegative ? `Owes ₹${Math.abs(net).toFixed(2)}` :
                    'All settled up ✓'}
                 </p>
+                {(paidByMember[member.id] > 0 || receivedByMember[member.id] > 0) && (
+                  <p className="mt-0.5 text-xs text-indigo-300">
+                    {paidByMember[member.id] > 0 ? `Paid now ₹${paidByMember[member.id].toFixed(2)}` : ''}
+                    {paidByMember[member.id] > 0 && receivedByMember[member.id] > 0 ? ' · ' : ''}
+                    {receivedByMember[member.id] > 0 ? `Received now ₹${receivedByMember[member.id].toFixed(2)}` : ''}
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <div className={`text-xl font-extrabold ${isPositive ? 'text-emerald-400' : isNegative ? 'text-rose-400' : 'text-slate-500'}`}>

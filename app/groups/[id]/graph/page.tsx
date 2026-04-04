@@ -108,7 +108,7 @@ export default function GraphPage() {
           <p className="font-bold text-emerald-400 text-lg">All settled up!</p>
           <p className="text-slate-400 text-sm mt-1">No payment arrows to show — everyone is square.</p>
           {/* Still render the member nodes */}
-          <div className="mt-6 w-full max-w-md mx-auto overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02]">
+          <div className="mt-6 w-full max-w-md mx-auto overflow-hidden rounded-2xl border border-white/[0.07] bg-white/2">
             <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
               {positions.map((pos, i) => {
                 const m = group.members[i];
@@ -213,7 +213,7 @@ export default function GraphPage() {
               const from = group.members[getMemberIndex(txn.from)];
               const to = group.members[getMemberIndex(txn.to)];
               return (
-                <div key={i} className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
+                <div key={i} className="rounded-xl border border-white/[0.07] bg-white/3 p-3">
                   <div className="flex items-center gap-1 mb-1">
                     <span className="text-[11px] font-bold" style={{ color: from?.color }}>{from?.name}</span>
                     <span className="text-slate-500 text-xs">→</span>

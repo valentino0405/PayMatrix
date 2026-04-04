@@ -1,11 +1,35 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { Zap, ArrowRight, Check, TrendingDown, Users, Receipt, DollarSign, Loader2 } from 'lucide-react';
+import { Zap, ArrowRight, Check, TrendingDown, Users, Receipt, DollarSign, Loader2, CreditCard, MapPin, CalendarDays } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { calculateSettlements, naiveTransactionCount, Transaction } from '@/lib/settlement';
 
 interface PaidRecord { from: string; to: string; amount: number; }
+interface PaymentRecord {
+  _id: string;
+  from: string;
+  to: string;
+  amount: number;
+  status: 'initiated' | 'processing' | 'success' | 'failed';
+  reminderAt?: string;
+  locationTag?: { label?: string; city?: string };
+  createdAt?: string;
+}
+interface PayDraft {
+  payAmount: string;
+  amountMode: 'manual' | 'full' | 'half' | 'random';
+  locationLabel: string;
+  city: string;
+  reminderAt: string;
+  note: string;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const toDateTimeLocal = (date: Date) => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
 
 export default function SettlePage() {
   const { id } = useParams<{ id: string }>();
@@ -13,11 +37,31 @@ export default function SettlePage() {
   const [optimized, setOptimized] = useState(false);
   const [animating, setAnimating] = useState(false);
   const [paidRecords, setPaidRecords] = useState<PaidRecord[]>([]);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [payDrafts, setPayDrafts] = useState<Record<string, PayDraft>>({});
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
+  const nowLocal = toDateTimeLocal(new Date());
 
   const group = getGroup(id);
   const expenses = getGroupExpenses(id);
+
+  // ── Fetch existing paid records from MongoDB ────────────────────────────────
+  useEffect(() => {
+    Promise.all([
+      fetch(`/api/groups/${id}/settlements`).then(r => (r.ok ? r.json() : [])),
+      fetch(`/api/groups/${id}/payments`).then(r => (r.ok ? r.json() : [])),
+    ])
+      .then(([settlements, paymentRows]) => {
+        setPaidRecords(settlements.map((r: { from: string; to: string; amount: number }) => ({ from: r.from, to: r.to, amount: r.amount })));
+        setPayments(paymentRows);
+        if (settlements.length > 0) setOptimized(true);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [id]);
+
   if (!group) return null;
 
   const netBalances = getNetBalances(id);
@@ -28,22 +72,28 @@ export default function SettlePage() {
   const totalAmount = expenses.reduce((s, e) => s + e.amount, 0);
 
   const getMember = (mid: string) => group.members.find(m => m.id === mid);
+  const txnKey = (txn: Transaction) => `${txn.from}-${txn.to}-${txn.amount}`;
+  const emptyDraft = (): PayDraft => ({ payAmount: '', amountMode: 'full', locationLabel: '', city: '', reminderAt: '', note: '' });
+  const getDraft = (key: string): PayDraft => payDrafts[key] ?? emptyDraft();
+  const updateDraft = (key: string, patch: Partial<PayDraft>) => {
+    setPayDrafts(prev => ({ ...prev, [key]: { ...getDraft(key), ...patch } }));
+  };
 
-  // ── Fetch existing paid records from MongoDB ────────────────────────────────
-  useEffect(() => {
-    fetch(`/api/groups/${id}/settlements`)
-      .then(r => r.ok ? r.json() : [])
-      .then(data => {
-        setPaidRecords(data.map((r: { from: string; to: string; amount: number }) => ({ from: r.from, to: r.to, amount: r.amount })));
-        // Auto-show the optimized view if there are settlements
-        if (data.length > 0) setOptimized(true);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [id]);
+  const getPaidAmount = (txn: Transaction) => {
+    const total = payments
+      .filter(p => p.status === 'success' && p.from === txn.from && p.to === txn.to)
+      .reduce((sum, p) => sum + p.amount, 0);
+    return round2(Math.min(total, txn.amount));
+  };
+
+  const getRemaining = (txn: Transaction) => round2(Math.max(0, txn.amount - getPaidAmount(txn)));
 
   const isPaid = (txn: Transaction) =>
-    paidRecords.some(r => r.from === txn.from && r.to === txn.to && r.amount === txn.amount);
+    paidRecords.some(r => r.from === txn.from && r.to === txn.to && r.amount === txn.amount) ||
+    getRemaining(txn) <= 0;
+
+  const latestPaymentFor = (txn: Transaction) =>
+    payments.find(p => p.from === txn.from && p.to === txn.to && p.status === 'success');
 
   const handleOptimize = () => {
     if (optimized) return;
@@ -52,7 +102,7 @@ export default function SettlePage() {
   };
 
   const togglePaid = async (txn: Transaction) => {
-    const key = `${txn.from}-${txn.to}-${txn.amount}`;
+    const key = txnKey(txn);
     setSaving(key);
     const alreadyPaid = isPaid(txn);
     try {
@@ -75,6 +125,77 @@ export default function SettlePage() {
     finally { setSaving(null); }
   };
 
+  const handlePayNow = async (txn: Transaction) => {
+    const key = txnKey(txn);
+    const draft = getDraft(key);
+    const remaining = getRemaining(txn);
+    const manualAmount = draft.payAmount.trim() ? Number(draft.payAmount) : remaining;
+    const payAmount =
+      draft.amountMode === 'full'
+        ? remaining
+        : draft.amountMode === 'half'
+          ? round2(Math.max(0.01, remaining / 2))
+          : manualAmount;
+
+    if (!(payAmount > 0)) {
+      setFeedback({ type: 'error', text: 'Amount must be greater than ₹0.' });
+      return;
+    }
+    if (payAmount > remaining) {
+      setFeedback({ type: 'error', text: `Amount exceeds remaining ₹${remaining.toFixed(2)}.` });
+      return;
+    }
+    if (draft.reminderAt && new Date(draft.reminderAt).getTime() > Date.now()) {
+      setFeedback({ type: 'error', text: 'Reminder date cannot be in the future.' });
+      return;
+    }
+
+    setSaving(key);
+    setFeedback(null);
+
+    try {
+      const res = await fetch(`/api/groups/${id}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: txn.from,
+          to: txn.to,
+          amount: payAmount,
+          targetAmount: txn.amount,
+          locationLabel: draft.locationLabel.trim() || undefined,
+          city: draft.city.trim() || undefined,
+          reminderAt: draft.reminderAt || undefined,
+          note: draft.note.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Payment failed');
+
+      if (data?.transaction) {
+        setPayments(prev => [data.transaction as PaymentRecord, ...prev]);
+      }
+
+      if (data?.settlement || data?.alreadySettled || Number(data?.remaining ?? 0) <= 0) {
+        setPaidRecords(prev => {
+          const exists = prev.some(r => r.from === txn.from && r.to === txn.to && r.amount === txn.amount);
+          return exists ? prev : [...prev, { from: txn.from, to: txn.to, amount: txn.amount }];
+        });
+      }
+
+      const remainingAfter = Number(data?.remaining ?? Math.max(0, remaining - payAmount));
+      if (remainingAfter <= 0) {
+        setFeedback({ type: 'success', text: 'Payment successful. Fully settled and saved to database.' });
+      } else {
+        setFeedback({ type: 'success', text: `Payment successful. ₹${remainingAfter.toFixed(2)} still remaining.` });
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', text: err instanceof Error ? err.message : 'Payment failed' });
+    } finally {
+      setSaving(null);
+    }
+  };
+
   const allSettled = transactions.length > 0 && transactions.every(isPaid);
   const settledCount = transactions.filter(isPaid).length;
 
@@ -89,12 +210,18 @@ export default function SettlePage() {
     <div className="max-w-2xl mx-auto">
       {/* Hero */}
       <div className="mb-8 text-center">
-        <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/30 to-violet-500/20 border border-indigo-500/30 mb-4">
+        <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500/30 to-violet-500/20 border border-indigo-500/30 mb-4">
           <Zap className="h-8 w-8 text-indigo-400" />
         </div>
         <h2 className="text-2xl font-extrabold text-white">Settlement Optimizer</h2>
         <p className="mt-1 text-slate-400 text-sm">Min-Cash-Flow algorithm · Payments saved to database</p>
       </div>
+
+      {feedback && (
+        <div className={`mb-5 rounded-2xl border px-4 py-3 text-sm ${feedback.type === 'success' ? 'border-emerald-500/25 bg-emerald-500/8 text-emerald-300' : 'border-rose-500/25 bg-rose-500/8 text-rose-300'}`}>
+          {feedback.text}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="mb-6 grid grid-cols-3 gap-3">
@@ -125,7 +252,7 @@ export default function SettlePage() {
           </div>
 
           <button onClick={handleOptimize} disabled={animating || transactions.length === 0}
-            className={`w-full rounded-2xl py-4 text-base font-extrabold transition-all ${animating ? 'bg-indigo-600/50 text-indigo-300 cursor-wait' : transactions.length === 0 ? 'bg-white/5 text-slate-400 border border-white/10 cursor-not-allowed' : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:shadow-[0_0_40px_rgba(99,102,241,0.5)] hover:-translate-y-0.5'}`}>
+            className={`w-full rounded-2xl py-4 text-base font-extrabold transition-all ${animating ? 'bg-indigo-600/50 text-indigo-300 cursor-wait' : transactions.length === 0 ? 'bg-white/5 text-slate-400 border border-white/10 cursor-not-allowed' : 'bg-linear-to-r from-indigo-600 to-violet-600 text-white hover:shadow-[0_0_40px_rgba(99,102,241,0.5)] hover:-translate-y-0.5'}`}>
             {animating ? (
               <span className="flex items-center justify-center gap-2">
                 <Loader2 className="h-5 w-5 animate-spin" /> Optimizing...
@@ -147,12 +274,12 @@ export default function SettlePage() {
         <>
           {/* Before vs After */}
           <div className="mb-5 grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.06] p-4 text-center">
+            <div className="rounded-2xl border border-rose-500/20 bg-rose-500/6 p-4 text-center">
               <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Before</div>
               <div className="text-3xl font-black text-rose-400">{naive}</div>
               <div className="text-xs text-slate-400">transactions</div>
             </div>
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 text-center">
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/6 p-4 text-center">
               <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">After ⚡</div>
               <div className="text-3xl font-black text-emerald-400">{optimizedCount}</div>
               <div className="text-xs text-slate-400">transactions</div>
@@ -176,7 +303,7 @@ export default function SettlePage() {
               </div>
               <div className="h-2 rounded-full bg-white/10 overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-500"
+                  className="h-full rounded-full bg-linear-to-r from-indigo-500 to-emerald-500 transition-all duration-500"
                   style={{ width: `${transactions.length > 0 ? (settledCount / transactions.length) * 100 : 0}%` }}
                 />
               </div>
@@ -195,13 +322,24 @@ export default function SettlePage() {
             {transactions.map((txn, i) => {
               const from = getMember(txn.from);
               const to = getMember(txn.to);
-              const txnKey = `${txn.from}-${txn.to}-${txn.amount}`;
+              const key = txnKey(txn);
+              const draft = getDraft(key);
+              const matchedPayment = latestPaymentFor(txn);
+              const paidAmount = getPaidAmount(txn);
+              const remaining = getRemaining(txn);
+              const isAmountLocked = draft.amountMode === 'full' || draft.amountMode === 'half';
+              const currentPayAmount =
+                draft.amountMode === 'full'
+                  ? remaining.toFixed(2)
+                  : draft.amountMode === 'half'
+                    ? round2(Math.max(1, remaining / 2)).toFixed(2)
+                    : (draft.payAmount || '1');
               const isSettled = isPaid(txn);
-              const isSaving = saving === txnKey;
+              const isSaving = saving === key;
 
               return (
-                <div key={txnKey}
-                  className={`rounded-2xl border p-4 transition-all ${isSettled ? 'border-emerald-500/20 bg-emerald-500/[0.04] opacity-70' : 'border-white/[0.08] bg-white/[0.04] hover:border-white/15'}`}>
+                <div key={key}
+                  className={`rounded-2xl border p-4 transition-all ${isSettled ? 'border-emerald-500/20 bg-emerald-500/4 opacity-70' : 'border-white/8 bg-white/4 hover:border-white/15'}`}>
                   <div className="flex items-center gap-3">
                     <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${isSettled ? 'bg-emerald-500/20 text-emerald-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
                       {isSettled ? <Check className="h-4 w-4" /> : i + 1}
@@ -211,28 +349,134 @@ export default function SettlePage() {
                       <span className="font-semibold text-white text-sm">{from?.name}</span>
                     </div>
                     <div className="flex flex-1 items-center gap-1 justify-center">
-                      <div className="h-px flex-1 bg-gradient-to-r from-rose-500/50 to-emerald-500/50" />
+                      <div className="h-px flex-1 bg-linear-to-r from-rose-500/50 to-emerald-500/50" />
                       <div className="shrink-0 px-2 text-center">
                         <div className="text-base font-extrabold text-white">₹{txn.amount.toFixed(0)}</div>
                         <ArrowRight className="h-4 w-4 text-slate-400 mx-auto" />
                       </div>
-                      <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/50 to-emerald-500/20" />
+                      <div className="h-px flex-1 bg-linear-to-r from-emerald-500/50 to-emerald-500/20" />
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-white text-sm">{to?.name}</span>
                       <div className="h-9 w-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0" style={{ backgroundColor: to?.color }}>{to?.name.charAt(0)}</div>
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center justify-between">
+                  <div className="mt-3 flex flex-col gap-3">
                     <p className="text-xs text-slate-400">
                       <span style={{ color: from?.color }}>{from?.name}</span> pays <span style={{ color: to?.color }}>{to?.name}</span> ₹{txn.amount.toFixed(2)}
                       {isSettled && <span className="ml-2 text-emerald-400 font-semibold">· Saved to DB ✓</span>}
                     </p>
-                    <button onClick={() => togglePaid(txn)} disabled={isSaving}
-                      className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all disabled:opacity-50 ${isSettled ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white border border-white/10'}`}>
-                      {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                      {isSettled ? 'Settled ✓' : 'Mark Paid'}
-                    </button>
+
+                    <div className="flex flex-wrap items-center gap-3 text-xs">
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-slate-300">Paid: ₹{paidAmount.toFixed(2)}</span>
+                      <span className={`rounded-full border px-2 py-1 ${remaining > 0 ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>
+                        Remaining: ₹{remaining.toFixed(2)}
+                      </span>
+                    </div>
+
+                    {!isSettled && (
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <div className="md:col-span-2 grid gap-2 md:grid-cols-4">
+                          <input
+                            type="number"
+                            min="0.01"
+                            max={remaining}
+                            step="0.01"
+                            value={currentPayAmount}
+                            onChange={e => updateDraft(key, { payAmount: e.target.value, amountMode: 'manual' })}
+                            placeholder="Amount to pay now"
+                            disabled={isAmountLocked}
+                            className={`rounded-lg border px-3 py-2 text-xs text-white placeholder:text-slate-500 ${isAmountLocked ? 'border-white/10 bg-white/3 opacity-70 cursor-not-allowed' : 'border-white/10 bg-white/5'}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateDraft(key, { amountMode: 'full', payAmount: remaining.toFixed(2) })}
+                            className={`rounded-lg border px-3 py-2 text-xs transition-colors ${draft.amountMode === 'full' ? 'border-indigo-500/50 bg-indigo-500/20 text-indigo-200' : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'}`}
+                          >
+                            Full
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateDraft(key, { amountMode: 'half', payAmount: round2(Math.max(0.01, remaining / 2)).toFixed(2) })}
+                            className={`rounded-lg border px-3 py-2 text-xs transition-colors ${draft.amountMode === 'half' ? 'border-indigo-500/50 bg-indigo-500/20 text-indigo-200' : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'}`}
+                          >
+                            Half
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const start = round2(Math.min(remaining, 1));
+                              updateDraft(key, { amountMode: 'random', payAmount: start.toFixed(2) });
+                            }}
+                            className={`rounded-lg border px-3 py-2 text-xs transition-colors ${draft.amountMode === 'random' ? 'border-indigo-500/50 bg-indigo-500/20 text-indigo-200' : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'}`}
+                          >
+                            Random
+                          </button>
+                        </div>
+
+                        <input
+                          value={draft.locationLabel}
+                          onChange={e => updateDraft(key, { locationLabel: e.target.value })}
+                          placeholder="Location label (e.g. Dinner in Mumbai)"
+                          className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder:text-slate-500"
+                        />
+                        <input
+                          value={draft.city}
+                          onChange={e => updateDraft(key, { city: e.target.value })}
+                          placeholder="City"
+                          className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder:text-slate-500"
+                        />
+                        <input
+                          type="datetime-local"
+                          value={draft.reminderAt}
+                          onChange={e => updateDraft(key, { reminderAt: e.target.value })}
+                          max={nowLocal}
+                          className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white"
+                        />
+                        <input
+                          value={draft.note}
+                          onChange={e => updateDraft(key, { note: e.target.value })}
+                          placeholder="Optional note"
+                          className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder:text-slate-500"
+                        />
+                      </div>
+                    )}
+
+                    {matchedPayment && (
+                      <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/[0.07] px-3 py-2 text-xs text-indigo-200">
+                        <div className="flex flex-wrap items-center gap-3">
+                          {matchedPayment.locationTag?.label && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{matchedPayment.locationTag.label}</span>}
+                          {matchedPayment.locationTag?.city && <span className="text-indigo-300/80">{matchedPayment.locationTag.city}</span>}
+                          {matchedPayment.reminderAt && <span className="inline-flex items-center gap-1"><CalendarDays className="h-3 w-3" />{new Date(matchedPayment.reminderAt).toLocaleString('en-IN')}</span>}
+                          {matchedPayment._id && (
+                            <a
+                              href={`/api/groups/${id}/payments/${matchedPayment._id}/calendar`}
+                              className="underline decoration-dotted hover:text-white"
+                            >
+                              Download .ics reminder
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-end gap-2">
+                      {!isSettled && (
+                        <button
+                          onClick={() => handlePayNow(txn)}
+                          disabled={isSaving}
+                          className="flex items-center gap-1.5 rounded-lg bg-linear-to-r from-indigo-600 to-violet-600 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50"
+                        >
+                          {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <CreditCard className="h-3 w-3" />}
+                          Pay Now (Demo)
+                        </button>
+                      )}
+                      <button onClick={() => togglePaid(txn)} disabled={isSaving}
+                        className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all disabled:opacity-50 ${isSettled ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white border border-white/10'}`}>
+                        {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                        {isSettled ? 'Unmark Paid' : 'Manual Mark Paid'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

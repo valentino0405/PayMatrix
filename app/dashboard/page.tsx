@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { UserButton } from '@clerk/nextjs';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, Users, X, ArrowRight, Receipt, TrendingUp, Loader2 } from 'lucide-react';
@@ -101,16 +102,57 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#07070f] text-white">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 left-1/4 w-[500px] h-[500px] rounded-full bg-indigo-700/15 blur-[120px]" />
+        <div className="absolute -top-32 left-1/4 w-125 h-125 rounded-full bg-indigo-700/15 blur-[120px]" />
       </div>
 
       <nav className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#07070f]/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-5 sm:px-8">
           <Link href="/" className="text-lg font-bold"><span className="text-indigo-400">Pay</span><span className="text-emerald-400">Matrix</span></Link>
-          <button onClick={() => setShowCreate(true)}
+          <div className='flex space-x-1.5'>
+            <button onClick={() => setShowCreate(true)}
             className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)]">
             <Plus className="h-4 w-4" /> New Group
           </button>
+            <UserButton
+                showName
+                appearance={{
+                  variables: {
+                    colorBackground: "#111118",
+                    colorText: "#ffffff",
+                    colorTextSecondary: "#94a3b8",
+                    colorPrimary: "#4f46e5",
+                    borderRadius: "0.75rem",
+                  },
+                  elements: {
+                    userButtonBox: "gap-2",
+                    userButtonOuterIdentifier:
+                      "text-sm font-semibold !text-white",
+                    userButtonTrigger:
+                      "h-9 rounded-xl border border-white/10 bg-white/5 px-2 text-white hover:bg-white/10 transition-all shadow-none focus:shadow-none focus:ring-0",
+                    userButtonAvatarBox:
+                      "h-7 w-7 rounded-full border border-white/10",
+                    userButtonPopoverCard:
+                      "rounded-2xl border border-white/[0.07] bg-[#111118] !text-white shadow-2xl",
+                    userButtonPopoverActions: "gap-1 p-2",
+                    userButtonPopoverActionButton:
+                      "rounded-xl border border-transparent bg-transparent !text-white hover:bg-white/10 hover:border-white/10 active:bg-white/10",
+                    userButtonPopoverActionButtonText:
+                      "text-sm font-semibold !text-white",
+                    userButtonPopoverActionButtonIcon: "!text-slate-400",
+                    userPreviewMainIdentifier:
+                      "text-sm font-semibold !text-white",
+                    userPreviewSecondaryIdentifier: "text-xs !text-slate-400",
+                    userButtonPopoverMain: "!text-white",
+                    userButtonPopoverActionButton__manageAccount:
+                      "rounded-xl border border-transparent bg-transparent !text-white hover:bg-white/10 hover:border-white/10 active:bg-white/10",
+                    userButtonPopoverActionButton__signOut:
+                      "rounded-xl border border-transparent bg-transparent !text-white hover:bg-white/10 hover:border-white/10 active:bg-white/10",
+                    userButtonPopoverFooter: "hidden",
+                  },
+                }}
+              />
+          </div>
+          
         </div>
       </nav>
 
@@ -147,7 +189,7 @@ export default function DashboardPage() {
                 const total = ge.reduce((s, e) => s + e.amount, 0);
                 return (
                   <Link key={group.id} href={`/groups/${group.id}`} className="group block">
-                    <div className="h-full rounded-2xl border border-white/[0.07] bg-white/[0.035] p-5 transition-all hover:border-indigo-500/40 hover:bg-white/[0.06] hover:-translate-y-1 hover:shadow-[0_8px_32px_rgba(99,102,241,0.15)]">
+                    <div className="h-full rounded-2xl border border-white/[0.07] bg-white/[0.035] p-5 transition-all hover:border-indigo-500/40 hover:bg-white/6 hover:-translate-y-1 hover:shadow-[0_8px_32px_rgba(99,102,241,0.15)]">
                       <div className="flex items-start justify-between mb-4">
                         <div>
                           <span className="text-xl">{TYPE_EMOJI[group.type]}</span>
