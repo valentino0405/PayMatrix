@@ -21,9 +21,26 @@ export const MEMBER_COLORS = ['#6366f1','#ec4899','#f59e0b','#10b981','#3b82f6',
 
 // Normalize MongoDB _id → id
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ng = (g: any): Group => ({ id: g._id ?? g.id, name: g.name, type: g.type, members: g.members ?? [], inviteCode: g.inviteCode, createdAt: g.createdAt });
+const ng = (g: any): Group => ({
+  id: String(g._id ?? g.id),
+  name: g.name,
+  type: g.type,
+  members: (g.members ?? []).map((m: Member) => ({ ...m })),
+  inviteCode: g.inviteCode,
+  createdAt: g.createdAt,
+});
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ne = (e: any): Expense => ({ id: e._id ?? e.id, groupId: e.groupId, description: e.description, amount: e.amount, paidBy: e.paidBy, splitType: e.splitType, splits: e.splits ?? [], category: e.category, createdAt: e.createdAt });
+const ne = (e: any): Expense => ({
+  id: String(e._id ?? e.id),
+  groupId: String(e.groupId),
+  description: e.description,
+  amount: Number(e.amount),
+  paidBy: String(e.paidBy),
+  splitType: e.splitType,
+  splits: (e.splits ?? []).map((s: ExpenseSplit) => ({ memberId: String(s.memberId), amount: Number(s.amount) })),
+  category: e.category ?? 'Other',
+  createdAt: e.createdAt,
+});
 
 interface StoreCtx {
   groups: Group[]; expenses: Expense[]; loading: boolean;
@@ -45,72 +62,133 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // ── Core fetch: load all groups + all their expenses ────────────────────────
   const refreshGroups = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch('/api/groups');
       if (!res.ok) { setGroups([]); setExpenses([]); return; }
-      const raw = await res.json();
-      const gs: Group[] = raw.map(ng);
+
+      const rawGroups = await res.json();
+      const gs: Group[] = rawGroups.map(ng);
       setGroups(gs);
-      // Load expenses for all groups in parallel
-      const all = await Promise.all(
-        gs.map(g => fetch(`/api/groups/${g.id}/expenses`).then(r => r.ok ? r.json() : []).then((a: unknown[]) => a.map(ne)))
+
+      if (gs.length === 0) { setExpenses([]); return; }
+
+      // Fetch expenses for all groups in parallel
+      const expArrays = await Promise.all(
+        gs.map(async (g) => {
+          try {
+            const r = await fetch(`/api/groups/${g.id}/expenses`);
+            if (!r.ok) return [];
+            const raw = await r.json();
+            return Array.isArray(raw) ? raw.map(ne) : [];
+          } catch { return []; }
+        })
       );
-      setExpenses(all.flat());
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
+      setExpenses(expArrays.flat());
+    } catch (err) {
+      console.error('refreshGroups error:', err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { refreshGroups(); }, [refreshGroups]);
 
+  // ── addGroup ─────────────────────────────────────────────────────────────────
   const addGroup = useCallback(async (d: { name: string; type: GroupType; memberNames: string[] }): Promise<Group> => {
-    const res = await fetch('/api/groups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
-    const g = ng(await res.json());
+    const res = await fetch('/api/groups', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d),
+    });
+    if (!res.ok) throw new Error('Failed to create group');
+    const raw = await res.json();
+    const g = ng(raw);
     setGroups(p => [g, ...p]);
     return g;
   }, []);
 
+  // ── addMember ────────────────────────────────────────────────────────────────
   const addMember = useCallback(async (groupId: string, name: string) => {
-    const group = groups.find(g => g.id === groupId); if (!group) return;
-    const newMember: Member = { id: Date.now().toString(36), name, color: MEMBER_COLORS[group.members.length % MEMBER_COLORS.length] };
-    const res = await fetch(`/api/groups/${groupId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ members: [...group.members, newMember] }) });
-    setGroups(p => p.map(g => g.id === groupId ? ng(res.ok ? res.json() : g) : g));
-    await refreshGroups();
-  }, [groups, refreshGroups]);
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+    const newMember: Member = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+      name,
+      color: MEMBER_COLORS[group.members.length % MEMBER_COLORS.length],
+    };
+    const res = await fetch(`/api/groups/${groupId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ members: [...group.members, newMember] }),
+    });
+    if (res.ok) {
+      const raw = await res.json();
+      setGroups(p => p.map(g => g.id === groupId ? ng(raw) : g));
+    }
+  }, [groups]);
 
+  // ── removeMember ─────────────────────────────────────────────────────────────
   const removeMember = useCallback(async (groupId: string, memberId: string) => {
-    const group = groups.find(g => g.id === groupId); if (!group) return;
-    await fetch(`/api/groups/${groupId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ members: group.members.filter(m => m.id !== memberId) }) });
-    await refreshGroups();
-  }, [groups, refreshGroups]);
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+    const res = await fetch(`/api/groups/${groupId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ members: group.members.filter(m => m.id !== memberId) }),
+    });
+    if (res.ok) {
+      const raw = await res.json();
+      setGroups(p => p.map(g => g.id === groupId ? ng(raw) : g));
+    }
+  }, [groups]);
 
+  // ── addExpense — write to DB, then RE-FETCH to get the real stored data ──────
   const addExpense = useCallback(async (expense: Omit<Expense, 'id' | 'createdAt'>) => {
-    const res = await fetch(`/api/groups/${expense.groupId}/expenses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(expense) });
+    const res = await fetch(`/api/groups/${expense.groupId}/expenses`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(expense),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Failed to save expense: ${err}`);
+    }
     const raw = await res.json();
-    setExpenses(p => [ne(raw), ...p]);
+    const saved = ne(raw);
+    // Immediately add to local state for instant UI update
+    setExpenses(p => [saved, ...p.filter(e => e.id !== saved.id)]);
   }, []);
 
+  // ── deleteExpense ─────────────────────────────────────────────────────────────
   const deleteExpense = useCallback(async (expenseId: string) => {
     await fetch(`/api/expenses/${expenseId}`, { method: 'DELETE' });
     setExpenses(p => p.filter(e => e.id !== expenseId));
   }, []);
 
+  // ── Selectors ─────────────────────────────────────────────────────────────────
   const getGroup = useCallback((id: string) => groups.find(g => g.id === id), [groups]);
-  const getGroupExpenses = useCallback((gid: string) => expenses.filter(e => e.groupId === gid), [expenses]);
+
+  const getGroupExpenses = useCallback((gid: string) => {
+    return expenses.filter(e => e.groupId === gid);
+  }, [expenses]);
+
   const getNetBalances = useCallback((groupId: string): Record<string, number> => {
-    const group = groups.find(g => g.id === groupId); if (!group) return {};
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return {};
     const bal: Record<string, number> = {};
-    group.members.forEach(m => (bal[m.id] = 0));
-    expenses.filter(e => e.groupId === groupId).forEach(exp => {
-      bal[exp.paidBy] = (bal[exp.paidBy] || 0) + exp.amount;
-      exp.splits.forEach(s => { bal[s.memberId] = (bal[s.memberId] || 0) - s.amount; });
-    });
+    group.members.forEach(m => { bal[m.id] = 0; });
+    expenses
+      .filter(e => e.groupId === groupId)
+      .forEach(exp => {
+        bal[exp.paidBy] = (bal[exp.paidBy] || 0) + exp.amount;
+        exp.splits.forEach(s => { bal[s.memberId] = (bal[s.memberId] || 0) - s.amount; });
+      });
     return bal;
   }, [groups, expenses]);
 
   return (
-    <Ctx.Provider value={{ groups, expenses, loading, addGroup, addMember, removeMember, addExpense, deleteExpense, getGroup, getGroupExpenses, getNetBalances, refreshGroups }}>
+    <Ctx.Provider value={{
+      groups, expenses, loading,
+      addGroup, addMember, removeMember, addExpense, deleteExpense,
+      getGroup, getGroupExpenses, getNetBalances, refreshGroups,
+    }}>
       {children}
     </Ctx.Provider>
   );
