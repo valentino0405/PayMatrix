@@ -3,6 +3,8 @@ import { auth } from '@clerk/nextjs/server';
 import { connectDB } from '@/lib/mongodb';
 import Group from '@/lib/models/Group';
 import Expense from '@/lib/models/Expense';
+import SettlementRecord from '@/lib/models/SettlementRecord';
+import PaymentTransaction from '@/lib/models/PaymentTransaction';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -11,7 +13,7 @@ export async function GET(_: NextRequest, { params }: Ctx) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
   await connectDB();
-  const group = await Group.findById(id).lean();
+  const group = await Group.findOne({ _id: id, ownerClerkId: userId }).lean();
   if (!group) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json(group);
 }
@@ -23,7 +25,11 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
   const body = await req.json();
   await connectDB();
-  const group = await Group.findByIdAndUpdate(id, body, { returnDocument: 'after' });
+  const group = await Group.findOneAndUpdate(
+    { _id: id, ownerClerkId: userId },
+    body,
+    { returnDocument: 'after' }
+  );
   if (!group) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json(group);
 }
@@ -34,8 +40,13 @@ export async function DELETE(_: NextRequest, { params }: Ctx) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
   await connectDB();
-  await Group.findByIdAndDelete(id);
-  await Expense.deleteMany({ groupId: id });
+  const deleted = await Group.findOneAndDelete({ _id: id, ownerClerkId: userId });
+  if (!deleted) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  await Promise.all([
+    Expense.deleteMany({ groupId: id }),
+    SettlementRecord.deleteMany({ groupId: id }),
+    PaymentTransaction.deleteMany({ groupId: id }),
+  ]);
   return NextResponse.json({ ok: true });
 }
 
@@ -46,7 +57,11 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
   const body = await req.json();
   await connectDB();
-  const group = await Group.findByIdAndUpdate(id, { $set: body }, { new: true });
+  const group = await Group.findOneAndUpdate(
+    { _id: id, ownerClerkId: userId },
+    { $set: body },
+    { new: true }
+  );
   if (!group) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json(group);
 }

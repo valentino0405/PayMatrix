@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
-import { ArrowLeft, Copy, Check, Zap, BarChart3, Scale, ListTodo, PieChart, Bell, X, CreditCard, Pencil, Loader2 } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Zap, BarChart3, Scale, ListTodo, PieChart, Bell, X, CreditCard, Pencil, Loader2, ScanLine } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { calculateSettlements } from '@/lib/settlement';
@@ -248,6 +248,13 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
               {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
               {copied ? 'Copied!' : 'Invite'}
             </button>
+            <Link
+              href={`/scan?groupId=${id}`}
+              className="flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20 transition-all"
+            >
+              <ScanLine className="h-3.5 w-3.5" />
+              Scan Bill
+            </Link>
           </div>
 
           {/* Tabs */}

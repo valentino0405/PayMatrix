@@ -71,6 +71,7 @@ const ne = (e: any): Expense => ({
 interface StoreCtx {
   groups: Group[]; expenses: Expense[]; friends: Friend[]; loading: boolean; friendsLoading: boolean;
   addGroup: (d: { name: string; type: GroupType; members: { name: string; email?: string }[]; createdViaScan?: boolean }) => Promise<Group>;
+  deleteGroup: (groupId: string) => Promise<void>;
   updateGroupName: (groupId: string, name: string) => Promise<void>;
   updateGroupBudget: (groupId: string, budget: number | undefined) => Promise<void>;
   addMember: (groupId: string, name: string) => Promise<void>;
@@ -210,6 +211,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const g = ng(raw);
     setGroups(p => [g, ...p]);
     return g;
+  }, []);
+
+  // ── deleteGroup ─────────────────────────────────────────────────────────────
+  const deleteGroup = useCallback(async (groupId: string) => {
+    const res = await fetch(`/api/groups/${groupId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      throw new Error('Failed to delete group');
+    }
+
+    setGroups(p => p.filter(g => g.id !== groupId));
+    setExpenses(p => p.filter(e => e.groupId !== groupId));
+    setSettlements(p => p.filter(s => s.groupId !== groupId));
+    setPayments(p => p.filter(txn => txn.groupId !== groupId));
   }, []);
 
   // ── updateGroupName ─────────────────────────────────────────────────────────
@@ -390,7 +404,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   return (
     <Ctx.Provider value={{
       groups, expenses, friends, loading, friendsLoading,
-      addGroup, updateGroupName, addMember, removeMember, updateGroupBudget, addExpense, deleteExpense,
+      addGroup, deleteGroup, updateGroupName, addMember, removeMember, updateGroupBudget, addExpense, deleteExpense,
       getGroup, getGroupExpenses, getGroupSettlements, getGroupPayments, getNetBalances, refreshGroups, refreshFriends,
       addFriend, inviteFriend, settleFriend, unsettleFriend, updateFriendBalance,
     }}>

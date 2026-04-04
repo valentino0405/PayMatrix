@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Tesseract from 'tesseract.js';
 import { GroupType, SplitType, useStore } from '@/lib/store';
 import {
@@ -66,6 +66,7 @@ function parseReceiptText(text: string): ParsedReceipt {
 /* ─── Component ───────────────────────────────────────────── */
 export default function ReceiptScanner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { groups, addExpense, addGroup } = useStore();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -91,6 +92,10 @@ export default function ReceiptScanner() {
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupType, setNewGroupType] = useState<GroupType>('Other');
   const [newMembers, setNewMembers] = useState([{ name: '' }, { name: '' }]);
+
+  const groupIdFromQuery = searchParams.get('groupId') ?? '';
+  const forcedGroup = groupIdFromQuery ? groups.find((g) => g.id === groupIdFromQuery) : undefined;
+  const isGroupLocked = Boolean(forcedGroup);
 
   const selectedGroup = groups.find((g) => g.id === selectedGroupId);
 
@@ -199,6 +204,7 @@ export default function ReceiptScanner() {
   };
 
   const handleCreateGroupFromScan = async () => {
+    if (isGroupLocked) return;
     const validMembers = newMembers.map((m) => ({ name: m.name.trim() })).filter((m) => m.name);
     if (!newGroupName.trim()) {
       setError('Enter a name for the new group.');
@@ -358,7 +364,26 @@ export default function ReceiptScanner() {
     setNewGroupType('Other');
     setNewMembers([{ name: '' }, { name: '' }]);
     if (inputRef.current) inputRef.current.value = '';
+
+    if (forcedGroup) {
+      const memberIds = forcedGroup.members.map((m) => m.id);
+      setSelectedGroupId(forcedGroup.id);
+      setSelectedPayerId(forcedGroup.members[0]?.id ?? '');
+      setSelectedMemberIds(memberIds);
+    }
   };
+
+  // If scan is opened from a group page, preselect and lock that group.
+  useEffect(() => {
+    if (!forcedGroup) return;
+    if (selectedGroupId === forcedGroup.id && selectedMemberIds.length > 0) return;
+    const memberIds = forcedGroup.members.map((m) => m.id);
+    const parsedAmount = Number.parseFloat(amountInput) || 0;
+    setSelectedGroupId(forcedGroup.id);
+    setSelectedPayerId(forcedGroup.members[0]?.id ?? '');
+    setSelectedMemberIds(memberIds);
+    setSplitInputs(getDefaultSplitInputs(memberIds, splitType, parsedAmount));
+  }, [forcedGroup, selectedGroupId, selectedMemberIds.length, amountInput, splitType]);
 
   /* ─── Render ─────────────────────────────────────────── */
   return (
@@ -504,6 +529,7 @@ export default function ReceiptScanner() {
               <select
                 value={selectedGroupId}
                 onChange={(e) => handleGroupChange(e.target.value)}
+                disabled={isGroupLocked}
                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
               >
                 <option value="">Select a group</option>
@@ -511,9 +537,13 @@ export default function ReceiptScanner() {
                   <option key={group.id} value={group.id}>{group.name}</option>
                 ))}
               </select>
+              {isGroupLocked && (
+                <p className="text-[11px] text-indigo-500">Group is preselected from the group page.</p>
+              )}
             </label>
           </div>
 
+          {!isGroupLocked && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
             <button
               type="button"
@@ -590,6 +620,7 @@ export default function ReceiptScanner() {
               </div>
             )}
           </div>
+          )}
 
           <label className="space-y-1 block">
             <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Description</span>

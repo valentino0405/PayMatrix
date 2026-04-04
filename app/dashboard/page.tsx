@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Plus, Users, X, ArrowRight, Receipt, TrendingUp, Loader2,
-  UserPlus, CheckCircle2, RotateCcw, UserCircle2, Mail, Clock, Copy, Check, Share2,
+  UserPlus, CheckCircle2, RotateCcw, UserCircle2, Mail, Clock, Copy, Check, Share2, Trash2,
 } from 'lucide-react';
 import { useStore, GroupType, MEMBER_COLORS, Friend } from '@/lib/store';
 import { syncUser } from '@/app/actions/userActions';
@@ -463,9 +463,29 @@ function FriendsTab({ onAddFriend }: { onAddFriend: () => void }) {
 
 /* ─── Groups Tab ───────────────────────────────── */
 function GroupsTab({ onCreateGroup }: { onCreateGroup: () => void }) {
-  const { groups, expenses, loading } = useStore();
+  const { groups, expenses, loading, deleteGroup } = useStore();
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const totalExpenses = expenses.length;
   const totalAmount = expenses.reduce((s, e) => s + e.amount, 0);
+
+  const handleDeleteGroup = async (e: React.MouseEvent<HTMLButtonElement>, groupId: string, groupName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const confirmed = window.confirm(
+      `Delete "${groupName}"? This will permanently remove the group and all its expenses.`
+    );
+    if (!confirmed) return;
+
+    setDeletingGroupId(groupId);
+    try {
+      await deleteGroup(groupId);
+    } catch {
+      alert('Could not delete this group right now. Please try again.');
+    } finally {
+      setDeletingGroupId(null);
+    }
+  };
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-32">
@@ -489,7 +509,7 @@ function GroupsTab({ onCreateGroup }: { onCreateGroup: () => void }) {
 
   return (
     <>
-      <div className="mb-8 grid grid-cols-3 gap-4">
+      <div className="mb-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: 'Groups',   value: groups.length,                              icon: Users,      color: 'text-indigo-400'  },
           { label: 'Expenses', value: totalExpenses,                              icon: Receipt,    color: 'text-emerald-400' },
@@ -535,6 +555,18 @@ function GroupsTab({ onCreateGroup }: { onCreateGroup: () => void }) {
                   <span className="text-slate-400">{group.members.length} members • {gExpenses.length} expenses</span>
                   <span className="font-bold text-white">₹{total.toLocaleString('en-IN')}</span>
                 </div>
+                <div className="mt-4 border-t border-white/10 pt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteGroup(e, group.id, group.name)}
+                    disabled={deletingGroupId === group.id}
+                    title="Delete group"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-semibold text-rose-400 transition-all hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {deletingGroupId === group.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    Delete Group
+                  </button>
+                </div>
               </div>
             </Link>
           );
@@ -553,32 +585,36 @@ export default function DashboardPage() {
   useEffect(() => { syncUser().catch(console.error); }, []);
 
   return (
-    <div className="min-h-screen bg-[#07070f] text-white">
+    <div className="min-h-screen overflow-x-hidden bg-[#07070f] text-white">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-32 left-1/4 w-[500px] h-[500px] rounded-full bg-indigo-700/15 blur-[120px]" />
         <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] rounded-full bg-violet-700/10 blur-[120px]" />
       </div>
 
       <nav className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#07070f]/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-5 sm:px-8">
-          <Link href="/" className="text-lg font-bold">
-            <span className="text-indigo-400">Pay</span><span className="text-emerald-400">Matrix</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/global-settle" className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all">
-              🌍 Global Optimization
+        <div className="mx-auto w-full max-w-6xl px-4 py-2 sm:px-8">
+          <div className="flex items-center justify-between gap-3">
+            <Link href="/" className="text-base sm:text-lg font-bold shrink-0">
+              <span className="text-indigo-400">Pay</span><span className="text-emerald-400">Matrix</span>
             </Link>
-            {tab === 'friends' ? (
-              <button onClick={() => setShowAddFriend(true)}
-                className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)]">
-                <UserPlus className="h-4 w-4" /> Add Friend
-              </button>
-            ) : (
-              <button onClick={() => setShowCreate(true)}
-                className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)]">
-                <Plus className="h-4 w-4" /> New Group
-              </button>
-            )}
+
+            <div className="hidden sm:flex items-center gap-3">
+              <Link href="/global-settle" className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all">
+                🌍 Global Optimization
+              </Link>
+              {tab === 'friends' ? (
+                <button onClick={() => setShowAddFriend(true)}
+                  className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)]">
+                  <UserPlus className="h-4 w-4" /> Add Friend
+                </button>
+              ) : (
+                <button onClick={() => setShowCreate(true)}
+                  className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)]">
+                  <Plus className="h-4 w-4" /> New Group
+                </button>
+              )}
+            </div>
+
             <UserButton
                 showName
                 appearance={{
@@ -609,10 +645,27 @@ export default function DashboardPage() {
                 }}
               />
           </div>
+
+          <div className="mt-2 flex gap-2 sm:hidden">
+            <Link href="/global-settle" className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all">
+              🌍 Global optimization
+            </Link>
+            {tab === 'friends' ? (
+              <button onClick={() => setShowAddFriend(true)}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-500 transition-all">
+                <UserPlus className="h-3.5 w-3.5" /> Add Friend
+              </button>
+            ) : (
+              <button onClick={() => setShowCreate(true)}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-500 transition-all">
+                <Plus className="h-3.5 w-3.5" /> New Group
+              </button>
+            )}
+          </div>
         </div>
       </nav>
 
-      <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8">
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
         <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-extrabold text-white">
@@ -623,7 +676,7 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="flex rounded-xl border border-white/[0.08] bg-white/[0.03] p-1 gap-1">
+          <div className="flex w-full sm:w-auto rounded-xl border border-white/[0.08] bg-white/[0.03] p-1 gap-1">
             {(['friends', 'groups'] as const).map(t => (
               <button key={t} onClick={() => setTab(t)}
                 className={`flex items-center justify-center flex-1 sm:flex-none gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition-all capitalize ${tab === t ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/[0.05]'}`}>

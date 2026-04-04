@@ -1,7 +1,8 @@
 'use client';
+import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { Plus, X, Trash2, UtensilsCrossed, Plane, Home, PartyPopper, ShoppingBag, Zap, Heart, MoreHorizontal, Search, Filter, Sparkles, AlertTriangle, Mic } from 'lucide-react';
+import { Plus, X, Trash2, UtensilsCrossed, Plane, Home, PartyPopper, ShoppingBag, Zap, Heart, MoreHorizontal, Search, Filter, Sparkles, AlertTriangle, Mic, ScanLine } from 'lucide-react';
 import { useStore, Category, SplitType, Member } from '@/lib/store';
 
 // Allow SpeechRecognition types
@@ -262,7 +263,7 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Category</label>
-            <div className="grid grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
               {CATEGORIES.map(c => (
                 <button key={c} type="button" onClick={() => setCategory(c)}
                   className={`rounded-xl py-2 text-xs font-semibold transition-all border flex flex-col items-center gap-0.5 ${category === c ? 'border-white/30 bg-white/10 text-white' : 'border-white/6 bg-white/3 text-slate-400 hover:bg-white/[0.07]'}`}>
@@ -366,7 +367,7 @@ export default function GroupExpensesPage() {
   const activeFilters = [filterCategory !== 'All', filterMember !== 'All', search !== ''].filter(Boolean).length;
 
   return (
-    <div>
+    <div className="pb-28 sm:pb-8">
       {/* Summary bar */}
       {expenses.length > 0 && (
         <div className="mb-5 flex gap-3 flex-wrap">
@@ -386,7 +387,7 @@ export default function GroupExpensesPage() {
       {/* ── Transaction History Filters ─────────────────────────────────────── */}
       {expenses.length > 0 && (
         <div className="mb-4 space-y-2">
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
               <input value={search} onChange={e => setSearch(e.target.value)}
@@ -394,7 +395,7 @@ export default function GroupExpensesPage() {
                 className="w-full rounded-xl border border-white/10 bg-white/5 pl-9 pr-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500/50 transition-all" />
             </div>
             <button onClick={() => setShowFilters(v => !v)}
-              className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-semibold transition-all ${showFilters || activeFilters > 0 ? 'border-indigo-500/50 bg-indigo-500/15 text-indigo-300' : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10'}`}>
+              className={`flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-semibold transition-all ${showFilters || activeFilters > 0 ? 'border-indigo-500/50 bg-indigo-500/15 text-indigo-300' : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10'}`}>
               <Filter className="h-3.5 w-3.5" />
               Filters
               {activeFilters > 0 && <span className="rounded-full bg-indigo-500 text-white text-[9px] px-1.5 py-0.5 font-bold">{activeFilters}</span>}
@@ -519,10 +520,20 @@ export default function GroupExpensesPage() {
         </div>
       )}
 
+      {/* Scan + Add Expense actions */}
+      <Link
+        href={`/scan?groupId=${id}`}
+        className="fixed bottom-6 left-4 sm:left-6 z-30 flex items-center gap-2 rounded-2xl border border-indigo-500/40 bg-[#0f1020] px-3.5 sm:px-5 py-3 sm:py-3.5 text-sm font-bold text-indigo-300 shadow-[0_8px_32px_rgba(79,70,229,0.28)] hover:bg-[#151735] transition-all hover:-translate-y-0.5"
+      >
+        <ScanLine className="h-5 w-5" />
+        <span className="hidden sm:inline">Scan Bill</span>
+      </Link>
+
       {/* FAB */}
       <button onClick={() => setShowAdd(true)} id="add-expense-btn"
-        className="fixed bottom-6 right-6 flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3.5 text-sm font-bold text-white shadow-[0_8px_32px_rgba(99,102,241,0.5)] hover:bg-indigo-500 transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_40px_rgba(99,102,241,0.6)] z-30">
-        <Plus className="h-5 w-5" /> Add Expense
+        className="fixed bottom-6 right-4 sm:right-6 flex items-center gap-2 rounded-2xl bg-indigo-600 px-3.5 sm:px-5 py-3 sm:py-3.5 text-sm font-bold text-white shadow-[0_8px_32px_rgba(99,102,241,0.5)] hover:bg-indigo-500 transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_40px_rgba(99,102,241,0.6)] z-30">
+        <Plus className="h-5 w-5" />
+        <span className="hidden sm:inline">Add Expense</span>
       </button>
 
       {showAdd && <AddExpenseModal groupId={id} onClose={() => setShowAdd(false)} />}
