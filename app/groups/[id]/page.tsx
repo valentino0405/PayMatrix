@@ -2,7 +2,8 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Plus, X, Trash2, UtensilsCrossed, Plane, Home, PartyPopper, ShoppingBag, Zap, Heart, MoreHorizontal } from 'lucide-react';
-import { useStore, Category, SplitType } from '@/lib/store';
+import { Category, Expense, Group, SplitType } from '@/lib/groupTypes';
+import { createExpenseAction, deleteExpenseAction, fetchGroupDataAction } from '@/app/actions/groupActions';
 
 const CATEGORY_META: Record<Category, { icon: React.ElementType; emoji: string; color: string }> = {
   Food:          { icon: UtensilsCrossed, emoji: '🍕', color: '#f59e0b' },
@@ -51,9 +52,17 @@ function parseNLP(text: string): { amount?: number; category?: Category } {
 }
 
 // ── AddExpenseModal ───────────────────────────────────────────────────────────
-function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () => void }) {
-  const { getGroup, addExpense } = useStore();
-  const group = getGroup(groupId)!;
+function AddExpenseModal({
+  group,
+  groupId,
+  onClose,
+  onAddExpense,
+}: {
+  group: Group;
+  groupId: string;
+  onClose: () => void;
+  onAddExpense: (expense: Omit<Expense, 'id' | 'createdAt'>) => Promise<void>;
+}) {
 
   const [desc, setDesc] = useState('');
   const [amount, setAmount] = useState('');
@@ -113,7 +122,7 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
     return true;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (!validate()) return;
@@ -125,8 +134,13 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
       else amt = parseFloat(splits[m.id] || '0');
       return { memberId: m.id, amount: Math.round(amt * 100) / 100 };
     });
-    addExpense({ groupId, description: desc.trim(), amount: total, paidBy, splitType, splits: finalSplits, category });
-    onClose();
+    try {
+      await onAddExpense({ groupId, description: desc.trim(), amount: total, paidBy, splitType, splits: finalSplits, category });
+      onClose();
+    } catch (err) {
+      console.error('Failed to add expense:', err);
+      setError('Could not add expense. Please try again.');
+    }
   };
 
   const total = parseFloat(amount) || 0;
@@ -191,7 +205,7 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
               {CATEGORIES.map(c => (
                 <button
                   key={c} type="button" onClick={() => setCategory(c)}
-                  className={`rounded-xl py-2 text-xs font-semibold transition-all border flex flex-col items-center gap-0.5 ${category === c ? 'border-white/30 bg-white/10 text-white' : 'border-white/[0.06] bg-white/[0.03] text-slate-400 hover:bg-white/[0.07]'}`}
+                  className={`rounded-xl py-2 text-xs font-semibold transition-all border flex flex-col items-center gap-0.5 ${category === c ? 'border-white/30 bg-white/10 text-white' : 'border-white/6 bg-white/3 text-slate-400 hover:bg-white/[0.07]'}`}
                 >
                   <span className="text-base">{CATEGORY_META[c].emoji}</span>
                   <span className="truncate">{c}</span>
@@ -278,12 +292,41 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
 // ── Main expenses page ────────────────────────────────────────────────────────
 export default function GroupExpensesPage() {
   const { id } = useParams<{ id: string }>();
-  const { getGroup, getGroupExpenses, deleteExpense } = useStore();
+  const [group, setGroup] = useState<Group | null>(null);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
 
-  const group = getGroup(id);
-  const expenses = getGroupExpenses(id);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const data = await fetchGroupDataAction(id);
+        if (!active) return;
+        setGroup(data?.group ?? null);
+        setExpenses(data?.expenses ?? []);
+      } catch (error) {
+        console.error('Failed to load group expenses:', error);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
   if (!group) return null;
+
+  const handleAddExpense = async (expense: Omit<Expense, 'id' | 'createdAt'>) => {
+    const created = await createExpenseAction(expense);
+    setExpenses((prev) => [created, ...prev]);
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    await deleteExpenseAction(expenseId);
+    setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
+  };
 
   const sorted = [...expenses].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const totalAmount = expenses.reduce((s, e) => s + e.amount, 0);
@@ -293,17 +336,23 @@ export default function GroupExpensesPage() {
   return (
     <div>
       {/* Summary bar */}
+      {loading && (
+        <div className="mb-4 rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm text-slate-400">
+          Loading expenses...
+        </div>
+      )}
+
       {expenses.length > 0 && (
         <div className="mb-5 flex gap-3 flex-wrap">
-          <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 flex-1 min-w-[120px]">
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 flex-1 min-w-30">
             <div className="text-xs text-slate-500 mb-0.5">Total Expenses</div>
             <div className="text-lg font-extrabold text-white">₹{totalAmount.toLocaleString('en-IN')}</div>
           </div>
-          <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 flex-1 min-w-[120px]">
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 flex-1 min-w-30">
             <div className="text-xs text-slate-500 mb-0.5">Transactions</div>
             <div className="text-lg font-extrabold text-white">{expenses.length}</div>
           </div>
-          <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 flex-1 min-w-[120px]">
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 flex-1 min-w-30">
             <div className="text-xs text-slate-500 mb-0.5">Members</div>
             <div className="text-lg font-extrabold text-white">{group.members.length}</div>
           </div>
@@ -317,7 +366,7 @@ export default function GroupExpensesPage() {
             const payer = getMember(expense.paidBy);
             const cat = CATEGORY_META[expense.category];
             return (
-              <div key={expense.id} className="group relative rounded-2xl border border-white/[0.07] bg-white/[0.035] p-4 transition-all hover:border-white/15 hover:bg-white/[0.05]">
+              <div key={expense.id} className="group relative rounded-2xl border border-white/[0.07] bg-white/[0.035] p-4 transition-all hover:border-white/15 hover:bg-white/5">
                 <div className="flex items-start gap-3">
                   {/* Category icon */}
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl" style={{ backgroundColor: cat.color + '20' }}>
@@ -360,7 +409,7 @@ export default function GroupExpensesPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => deleteExpense(expense.id)}
+                  onClick={() => handleDeleteExpense(expense.id)}
                   className="absolute right-3 top-3 hidden group-hover:flex h-7 w-7 items-center justify-center rounded-full text-slate-600 hover:bg-rose-500/20 hover:text-rose-400 transition-colors"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -385,7 +434,14 @@ export default function GroupExpensesPage() {
         <Plus className="h-5 w-5" /> Add Expense
       </button>
 
-      {showAdd && <AddExpenseModal groupId={id} onClose={() => setShowAdd(false)} />}
+      {showAdd && (
+        <AddExpenseModal
+          group={group}
+          groupId={id}
+          onClose={() => setShowAdd(false)}
+          onAddExpense={handleAddExpense}
+        />
+      )}
     </div>
   );
 }

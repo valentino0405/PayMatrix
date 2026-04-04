@@ -128,3 +128,14 @@
     @apply font-sans;
   }
 }
+
+/* Hide footer/badge only inside the UserButton popover. */
+.cl-userButtonPopoverFooter,
+.cl-userButtonPopoverCard .cl-footer {
+  display: none !important;
+}
+
+/* Hide Clerk dev badge strip on auth pages only, including portal-rendered nodes.
+body:has(.auth-clerk-page) .cl-internal-1dauvpw {
+  display: none !important;
+} */

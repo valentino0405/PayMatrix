@@ -18,25 +18,26 @@ export async function syncUser() {
       throw new Error("Clerk user not found");
     }
 
-    // Check if user already exists
-    let user = await db.user.findUnique({
-      where: {
+    const email = clerkUser.emailAddresses[0]?.emailAddress || "";
+    const name = `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim();
+
+    // Upsert avoids duplicate create races and keeps profile fields fresh.
+    const user = await db.user.upsert({
+      where: { clerkId: userId },
+      update: {
+        email,
+        name,
+        username: clerkUser.username || "",
+        avatarUrl: clerkUser.imageUrl,
+      },
+      create: {
         clerkId: userId,
+        email,
+        name,
+        username: clerkUser.username || "",
+        avatarUrl: clerkUser.imageUrl,
       },
     });
-
-    // If NOT → create user
-    if (!user) {
-      user = await db.user.create({
-        data: {
-          clerkId: userId,
-          email: clerkUser.emailAddresses[0]?.emailAddress || "",
-          name: `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`,
-          username: clerkUser.username || "",
-          avatarUrl: clerkUser.imageUrl,
-        },
-      });
-    }
 
     return user;
   } catch (error) {

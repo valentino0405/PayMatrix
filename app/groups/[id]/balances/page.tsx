@@ -1,16 +1,33 @@
 'use client';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { TrendingUp, TrendingDown, Minus, Zap } from 'lucide-react';
-import { useStore } from '@/lib/store';
+import { fetchGroupDataAction } from '@/app/actions/groupActions';
+import { computeNetBalances } from '@/lib/settlement';
+import { Expense, Group } from '@/lib/groupTypes';
 
 export default function BalancesPage() {
   const { id } = useParams<{ id: string }>();
-  const { getGroup, getNetBalances } = useStore();
-  const group = getGroup(id);
+  const [group, setGroup] = useState<Group | null>(null);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const data = await fetchGroupDataAction(id);
+      if (!active) return;
+      setGroup(data?.group ?? null);
+      setExpenses(data?.expenses ?? []);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
   if (!group) return null;
 
-  const balances = getNetBalances(id);
+  const balances = computeNetBalances(expenses);
   const entries = group.members
     .map(m => ({ member: m, net: Math.round((balances[m.id] ?? 0) * 100) / 100 }))
     .sort((a, b) => b.net - a.net);
@@ -50,9 +67,9 @@ export default function BalancesPage() {
             <div
               key={member.id}
               className={`flex items-center gap-4 rounded-2xl border p-4 transition-all ${
-                isPositive ? 'border-emerald-500/20 bg-emerald-500/[0.05]' :
-                isNegative ? 'border-rose-500/20 bg-rose-500/[0.05]' :
-                'border-white/[0.07] bg-white/[0.02]'
+                isPositive ? 'border-emerald-500/20 bg-emerald-500/5' :
+                isNegative ? 'border-rose-500/20 bg-rose-500/5' :
+                'border-white/[0.07] bg-white/2'
               }`}
             >
               <div

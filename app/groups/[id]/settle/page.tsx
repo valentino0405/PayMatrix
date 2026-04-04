@@ -1,22 +1,36 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Zap, ArrowRight, Check, TrendingDown, Users, Receipt, DollarSign } from 'lucide-react';
-import { useStore } from '@/lib/store';
-import { calculateSettlements, naiveTransactionCount, Transaction } from '@/lib/settlement';
+import { calculateSettlements, computeNetBalances, naiveTransactionCount, Transaction } from '@/lib/settlement';
+import { fetchGroupDataAction } from '@/app/actions/groupActions';
+import { Expense, Group } from '@/lib/groupTypes';
 
 export default function SettlePage() {
   const { id } = useParams<{ id: string }>();
-  const { getGroup, getGroupExpenses, getNetBalances } = useStore();
+  const [group, setGroup] = useState<Group | null>(null);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [optimized, setOptimized] = useState(false);
   const [settled, setSettled] = useState<Set<string>>(new Set());
   const [animating, setAnimating] = useState(false);
 
-  const group = getGroup(id);
-  const expenses = getGroupExpenses(id);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const data = await fetchGroupDataAction(id);
+      if (!active) return;
+      setGroup(data?.group ?? null);
+      setExpenses(data?.expenses ?? []);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
   if (!group) return null;
 
-  const netBalances = getNetBalances(id);
+  const netBalances = computeNetBalances(expenses);
   const transactions: Transaction[] = calculateSettlements(netBalances, group.members);
   const naive = naiveTransactionCount(netBalances);
   const optimizedCount = transactions.length;
@@ -45,7 +59,7 @@ export default function SettlePage() {
     <div className="max-w-2xl mx-auto">
       {/* Hero header */}
       <div className="mb-8 text-center">
-        <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/30 to-violet-500/20 border border-indigo-500/30 mb-4">
+        <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500/30 to-violet-500/20 border border-indigo-500/30 mb-4">
           <Zap className="h-8 w-8 text-indigo-400" />
         </div>
         <h2 className="text-2xl font-extrabold text-white">Settlement Optimizer</h2>
@@ -94,7 +108,7 @@ export default function SettlePage() {
                 ? 'bg-indigo-600/50 text-indigo-300 cursor-wait'
                 : transactions.length === 0
                 ? 'bg-white/5 text-slate-400 border border-white/10 cursor-not-allowed'
-                : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:shadow-[0_0_40px_rgba(99,102,241,0.5)] hover:-translate-y-0.5'
+                : 'bg-linear-to-r from-indigo-600 to-violet-600 text-white hover:shadow-[0_0_40px_rgba(99,102,241,0.5)] hover:-translate-y-0.5'
             }`}
           >
             {animating ? (
@@ -126,12 +140,12 @@ export default function SettlePage() {
         <>
           {/* Before vs After */}
           <div className="mb-5 grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.06] p-4 text-center">
+            <div className="rounded-2xl border border-rose-500/20 bg-rose-500/6 p-4 text-center">
               <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Before</div>
               <div className="text-3xl font-black text-rose-400">{naive}</div>
               <div className="text-xs text-slate-400">transactions</div>
             </div>
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 text-center">
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/6 p-4 text-center">
               <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">After ⚡</div>
               <div className="text-3xl font-black text-emerald-400">{optimizedCount}</div>
               <div className="text-xs text-slate-400">transactions</div>
@@ -167,8 +181,8 @@ export default function SettlePage() {
                   key={txnKey}
                   className={`rounded-2xl border p-4 transition-all ${
                     isSettled
-                      ? 'border-emerald-500/20 bg-emerald-500/[0.04] opacity-60'
-                      : 'border-white/[0.08] bg-white/[0.04] hover:border-white/15'
+                      ? 'border-emerald-500/20 bg-emerald-500/4 opacity-60'
+                      : 'border-white/8 bg-white/4 hover:border-white/15'
                   }`}
                   style={{ animationDelay: `${i * 100}ms` }}
                 >
@@ -188,12 +202,12 @@ export default function SettlePage() {
 
                     {/* Arrow + amount */}
                     <div className="flex flex-1 items-center gap-1 justify-center">
-                      <div className="h-px flex-1 bg-gradient-to-r from-rose-500/50 to-emerald-500/50" />
+                      <div className="h-px flex-1 bg-linear-to-r from-rose-500/50 to-emerald-500/50" />
                       <div className="shrink-0 px-2">
                         <div className="text-base font-extrabold text-white">₹{txn.amount.toFixed(0)}</div>
                         <ArrowRight className="h-4 w-4 text-slate-400 mx-auto" />
                       </div>
-                      <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/50 to-emerald-500/20" />
+                      <div className="h-px flex-1 bg-linear-to-r from-emerald-500/50 to-emerald-500/20" />
                     </div>
 
                     {/* To */}

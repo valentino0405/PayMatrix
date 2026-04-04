@@ -21,9 +21,9 @@ export default function LandingPage() {
     <main className="min-h-screen bg-[#07070f] text-white overflow-x-hidden">
       {/* radial glow orbs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-indigo-700/20 blur-[120px]" />
-        <div className="absolute top-1/2 -right-60 w-[500px] h-[500px] rounded-full bg-violet-700/15 blur-[120px]" />
-        <div className="absolute bottom-0 left-1/3 w-[400px] h-[400px] rounded-full bg-emerald-700/10 blur-[120px]" />
+        <div className="absolute -top-40 -left-40 w-150 h-150 rounded-full bg-indigo-700/20 blur-[120px]" />
+        <div className="absolute top-1/2 -right-60 w-125 h-125 rounded-full bg-violet-700/15 blur-[120px]" />
+        <div className="absolute bottom-0 left-1/3 w-100 h-100 rounded-full bg-emerald-700/10 blur-[120px]" />
       </div>
 
       {/* NAV — using sou2's Navbar component */}
@@ -37,7 +37,7 @@ export default function LandingPage() {
 
         <h1 className="max-w-4xl text-5xl font-extrabold leading-[1.08] tracking-tight sm:text-6xl md:text-7xl">
           Split expenses.{' '}
-          <span className="bg-gradient-to-r from-indigo-400 via-violet-400 to-pink-400 bg-clip-text text-transparent">
+          <span className="bg-linear-to-r from-indigo-400 via-violet-400 to-pink-400 bg-clip-text text-transparent">
             Settle smarter.
           </span>
         </h1>
@@ -84,7 +84,7 @@ export default function LandingPage() {
           {features.map(f => (
             <div
               key={f.label}
-              className="group rounded-2xl border border-white/[0.08] bg-white/[0.035] p-6 backdrop-blur transition-all hover:border-indigo-500/40 hover:bg-white/[0.06] hover:-translate-y-1"
+              className="group rounded-2xl border border-white/8 bg-white/[0.035] p-6 backdrop-blur transition-all hover:border-indigo-500/40 hover:bg-white/6 hover:-translate-y-1"
             >
               <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-400">
                 <f.icon className="h-5 w-5" />
@@ -103,7 +103,7 @@ export default function LandingPage() {
           {steps.map((step, i) => (
             <div key={step.n} className="relative flex flex-col items-center text-center">
               {i < steps.length - 1 && (
-                <div className="absolute top-7 left-[calc(50%+28px)] hidden w-[calc(100%-56px)] h-px bg-gradient-to-r from-indigo-500/50 to-transparent sm:block" />
+                <div className="absolute top-7 left-[calc(50%+28px)] hidden w-[calc(100%-56px)] h-px bg-linear-to-r from-indigo-500/50 to-transparent sm:block" />
               )}
               <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-indigo-500/40 bg-indigo-500/10 text-xl font-extrabold text-indigo-400">
                 {step.n}
@@ -117,8 +117,8 @@ export default function LandingPage() {
 
       {/* CTA BANNER */}
       <section className="mx-auto mb-20 w-full max-w-4xl px-5 sm:px-8">
-        <div className="relative overflow-hidden rounded-3xl border border-indigo-500/30 bg-gradient-to-br from-indigo-900/40 to-violet-900/30 p-10 text-center backdrop-blur">
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/10 to-violet-600/5" />
+        <div className="relative overflow-hidden rounded-3xl border border-indigo-500/30 bg-linear-to-br from-indigo-900/40 to-violet-900/30 p-10 text-center backdrop-blur">
+          <div className="absolute inset-0 bg-linear-to-br from-indigo-600/10 to-violet-600/5" />
           <div className="relative">
             <div className="mb-3 flex justify-center gap-4 text-emerald-400">
               <CheckCircle className="h-6 w-6" /><TrendingDown className="h-6 w-6" /><Shield className="h-6 w-6" />

@@ -1,4 +1,4 @@
-import type { Member, Expense } from './store';
+import type { Member, Expense } from './groupTypes';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface Transaction { from: string; to: string; amount: number; }

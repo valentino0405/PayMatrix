@@ -2,8 +2,9 @@
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { ArrowLeft, Copy, Check, Zap, BarChart3, Scale, ListTodo } from 'lucide-react';
-import { useState } from 'react';
-import { useStore } from '@/lib/store';
+import { useEffect, useState } from 'react';
+import { fetchGroupDataAction } from '@/app/actions/groupActions';
+import { Group } from '@/lib/groupTypes';
 
 const TABS = [
   { label: 'Expenses', href: '', icon: ListTodo },
@@ -16,15 +17,41 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
   const { id } = useParams<{ id: string }>();
   const pathname = usePathname();
   const router = useRouter();
-  const { getGroup } = useStore();
+  const [group, setGroup] = useState<Group | null>(null);
+  const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
 
-  const group = getGroup(id);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const data = await fetchGroupDataAction(id);
+        if (!active) return;
+        setGroup(data?.group ?? null);
+      } catch (error) {
+        console.error('Failed to load group:', error);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
 
-  if (!group) {
-    router.replace('/dashboard');
-    return null;
-  }
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (hasMounted && !loading && !group) {
+      router.replace('/dashboard');
+    }
+  }, [group, hasMounted, loading, router]);
+
+  if (!group) return null;
 
   const base = `/groups/${id}`;
 
@@ -41,7 +68,7 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-[#07070f] text-white">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-indigo-700/10 blur-[120px]" />
+        <div className="absolute -top-40 -right-40 w-125 h-125 rounded-full bg-indigo-700/10 blur-[120px]" />
       </div>
 
       {/* Header */}

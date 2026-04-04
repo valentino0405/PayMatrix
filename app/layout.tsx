@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Geist_Mono, Manrope } from "next/font/google";
-import { StoreProvider } from "@/lib/store";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -29,9 +28,7 @@ export default function RootLayout({
         className={`${manrope.variable} ${geistMono.variable} h-full antialiased`}
         lang="en"
       >
-        <body className="min-h-full flex flex-col">
-          <StoreProvider>{children}</StoreProvider>
-        </body>
+        <body className="min-h-full flex flex-col">{children}</body>
       </html>
     </ClerkProvider>
   );
