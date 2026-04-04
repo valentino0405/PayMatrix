@@ -1,10 +1,3 @@
-import "dotenv/config";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../lib/generated/prisma/client";
-
-const connectionString = `${process.env.DATABASE_URL}`;
-
-const adapter = new PrismaPg({ connectionString });
-const db = new PrismaClient({ adapter });
-
-export { db };
+// Prisma removed — project uses MongoDB via Mongoose
+// This stub prevents broken import errors. Safe to delete after cleanup.
+export const db = null;
