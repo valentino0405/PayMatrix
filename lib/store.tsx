@@ -8,10 +8,14 @@ export type Category = 'Food'|'Travel'|'Accommodation'|'Entertainment'|'Shopping
 export interface Friend {
   id: string;
   name: string;
+  email: string;
   color: string;
-  balance: number; // positive = they owe you, negative = you owe them
+  avatar?: string;
+  balance: number;   // positive = they owe you, negative = you owe them
+  note?: string;
   settled: boolean;
   settledAt?: string;
+  status: 'accepted' | 'pending';
   createdAt: string;
 }
 
@@ -36,7 +40,7 @@ const ng = (g: any): Group => ({ id: g._id ?? g.id, name: g.name, type: g.type, 
 const ne = (e: any): Expense => ({ id: e._id ?? e.id, groupId: e.groupId, description: e.description, amount: e.amount, paidBy: e.paidBy, splitType: e.splitType, splits: e.splits ?? [], category: e.category, createdAt: e.createdAt });
 
 interface StoreCtx {
-  groups: Group[]; expenses: Expense[]; friends: Friend[]; loading: boolean;
+  groups: Group[]; expenses: Expense[]; friends: Friend[]; loading: boolean; friendsLoading: boolean;
   addGroup: (d: { name: string; type: GroupType; memberNames: string[] }) => Promise<Group>;
   addMember: (groupId: string, name: string) => Promise<void>;
   removeMember: (groupId: string, memberId: string) => Promise<void>;
@@ -46,65 +50,35 @@ interface StoreCtx {
   getGroupExpenses: (groupId: string) => Expense[];
   getNetBalances: (groupId: string) => Record<string, number>;
   refreshGroups: () => Promise<void>;
-  
-  // Friend functions
-  addFriend: (name: string, balance: number) => void;
-  settleFriend: (id: string) => void;
-  unsettleFriend: (id: string) => void;
-  updateFriendBalance: (id: string, balance: number) => void;
+  refreshFriends: () => Promise<void>;
+  // Friend functions (all MongoDB-backed now)
+  addFriend: (name: string, balance: number) => void; // kept for backward compat
+  inviteFriend: (email: string, balance: number, note?: string) => Promise<{ success: boolean; inviteUrl?: string; message?: string; error?: string }>;
+  settleFriend: (id: string) => Promise<void>;
+  unsettleFriend: (id: string) => Promise<void>;
+  updateFriendBalance: (id: string, balance: number) => Promise<void>;
 }
 
 const Ctx = createContext<StoreCtx | null>(null);
 
-function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
-const FRIENDS_STORAGE_KEY = 'paymatrix_friends_v1';
-
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [groups, setGroups] = useState<Group[]>([]);
+  const [groups, setGroups]     = useState<Group[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [friends, setFriends] = useState<Friend[]>([]);
-  const [friendsReady, setFriendsReady] = useState(false);
+  const [loading, setLoading]   = useState(true);
+  const [friends, setFriends]   = useState<Friend[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState(true);
 
-  // Load friends from localStorage
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(FRIENDS_STORAGE_KEY);
-      if (raw) setFriends(JSON.parse(raw) || []);
-    } catch {}
-    setFriendsReady(true);
-  }, []);
-
-  // Save friends to localStorage
-  useEffect(() => {
-    if (friendsReady) localStorage.setItem(FRIENDS_STORAGE_KEY, JSON.stringify(friends));
-  }, [friends, friendsReady]);
-
-  // Handle older storage key fallback to prevent crash from undefined filter
-  useEffect(() => {
-    try {
-      const rawOld = localStorage.getItem('paymatrix_v1');
-      if (rawOld && friends.length === 0) {
-        const parsed = JSON.parse(rawOld);
-        if (parsed && Array.isArray(parsed.friends) && parsed.friends.length > 0) {
-          setFriends(parsed.friends);
-          // Delete old key to migrate fully over
-          localStorage.removeItem('paymatrix_v1');
-        }
-      }
-    } catch {}
-  }, [friends.length]);
-
-
+  /* ── Groups ───────────────────────────────────────────────────────── */
   const refreshGroups = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch('/api/groups');
       if (!res.ok) { setGroups([]); setExpenses([]); return; }
-      const raw = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let raw: any;
+      try { raw = JSON.parse(await res.text()); } catch { setGroups([]); setExpenses([]); return; }
       const gs: Group[] = Array.isArray(raw) ? raw.map(ng) : [];
       setGroups(gs);
-      // Load expenses for all groups in parallel
       const all = await Promise.all(
         gs.map(g => fetch(`/api/groups/${g.id}/expenses`).then(r => r.ok ? r.json() : []).then((a: unknown[]) => Array.isArray(a) ? a.map(ne) : []))
       );
@@ -115,6 +89,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { refreshGroups(); }, [refreshGroups]);
 
+  /* ── Friends (MongoDB) ────────────────────────────────────────────── */
+  const refreshFriends = useCallback(async () => {
+    try {
+      setFriendsLoading(true);
+      const res = await fetch('/api/friends');
+      if (!res.ok) { setFriends([]); return; }
+      const raw = await res.json();
+      setFriends(Array.isArray(raw) ? raw : []);
+    } catch (err) { console.error('refreshFriends:', err); }
+    finally { setFriendsLoading(false); }
+  }, []);
+
+  useEffect(() => { refreshFriends(); }, [refreshFriends]);
+
+  /* ── Group mutations ──────────────────────────────────────────────── */
   const addGroup = useCallback(async (d: { name: string; type: GroupType; memberNames: string[] }): Promise<Group> => {
     const res = await fetch('/api/groups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
     const g = ng(await res.json());
@@ -160,34 +149,58 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return bal;
   }, [groups, expenses]);
 
-  // Friend logic
-  const addFriend = useCallback((name: string, balance: number) => {
-    const f: Friend = {
-      id: uid(), name, balance, settled: false,
-      color: MEMBER_COLORS[Math.floor(Math.random() * MEMBER_COLORS.length)],
-      createdAt: new Date().toISOString(),
-    };
-    setFriends(p => (Array.isArray(p) ? [...p, f] : [f]));
-  }, []);
+  /* ── Friend mutations ─────────────────────────────────────────────── */
+  const inviteFriend = useCallback(async (email: string, balance: number, note?: string) => {
+    const res = await fetch('/api/friends/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ receiverEmail: email, balance, note }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      await refreshFriends();
+      return { success: true, inviteUrl: data.inviteUrl, message: data.message };
+    }
+    return { success: false, error: data.error };
+  }, [refreshFriends]);
 
-  const settleFriend = useCallback((id: string) => {
+  // Stub kept for type compatibility (not used — use inviteFriend instead)
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  const addFriend = useCallback((_name: string, _balance: number) => {}, []);
+
+  const settleFriend = useCallback(async (id: string) => {
+    await fetch(`/api/friends/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settled: true }),
+    });
     setFriends(p => p.map(f => f.id === id ? { ...f, settled: true, balance: 0, settledAt: new Date().toISOString() } : f));
   }, []);
 
-  const unsettleFriend = useCallback((id: string) => {
+  const unsettleFriend = useCallback(async (id: string) => {
+    await fetch(`/api/friends/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settled: false }),
+    });
     setFriends(p => p.map(f => f.id === id ? { ...f, settled: false, settledAt: undefined } : f));
   }, []);
 
-  const updateFriendBalance = useCallback((id: string, balance: number) => {
+  const updateFriendBalance = useCallback(async (id: string, balance: number) => {
+    await fetch(`/api/friends/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ balance }),
+    });
     setFriends(p => p.map(f => f.id === id ? { ...f, balance, settled: false } : f));
   }, []);
 
   return (
     <Ctx.Provider value={{
-      groups, expenses, friends, loading,
+      groups, expenses, friends, loading, friendsLoading,
       addGroup, addMember, removeMember, addExpense, deleteExpense,
-      getGroup, getGroupExpenses, getNetBalances, refreshGroups,
-      addFriend, settleFriend, unsettleFriend, updateFriendBalance
+      getGroup, getGroupExpenses, getNetBalances, refreshGroups, refreshFriends,
+      addFriend, inviteFriend, settleFriend, unsettleFriend, updateFriendBalance,
     }}>
       {children}
     </Ctx.Provider>

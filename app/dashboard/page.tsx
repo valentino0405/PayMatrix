@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Plus, Users, X, ArrowRight, Receipt, TrendingUp, Loader2,
-  UserPlus, CheckCircle2, RotateCcw, UserCircle2, Sparkles,
+  UserPlus, CheckCircle2, RotateCcw, UserCircle2, Mail, Clock, Copy, Check, Share2,
 } from 'lucide-react';
 import { useStore, GroupType, MEMBER_COLORS, Friend } from '@/lib/store';
 import { syncUser } from '@/app/actions/userActions';
@@ -14,59 +14,151 @@ const TYPE_EMOJI: Record<GroupType, string> = { Trip: '✈️', Roommates: '🏠
 
 type Tab = 'friends' | 'groups';
 
-function Avatar({ name, color, size = 8 }: { name: string; color: string; size?: number }) {
+function Avatar({ name, color, size = 8, avatar }: { name?: string; color?: string; size?: number; avatar?: string }) {
+  if (avatar) {
+    return <img src={avatar} alt={name || '?'} className="rounded-full object-cover" style={{ width: size * 4, height: size * 4 }} />;
+  }
+  const safeName = name || '?';
+  const safeColor = color || '#6366f1';
   return (
     <div
-      className="flex items-center justify-center rounded-full text-white font-bold"
-      style={{ backgroundColor: color, width: size * 4, height: size * 4, fontSize: size < 8 ? 10 : 13 }}
+      className="flex items-center justify-center rounded-full text-white font-bold flex-shrink-0"
+      style={{ backgroundColor: safeColor, width: size * 4, height: size * 4, fontSize: size < 8 ? 10 : 13 }}
     >
-      {name.charAt(0).toUpperCase()}
+      {safeName.charAt(0).toUpperCase()}
     </div>
   );
 }
 
-/* ─── Add Friend Modal ─────────────────────────── */
+/* ─── Add Friend Modal ─── (shareable invite link) ── */
 function AddFriendModal({ onClose }: { onClose: () => void }) {
-  const { addFriend } = useStore();
-  const [name, setName] = useState('');
+  const { inviteFriend } = useStore();
+  const [email, setEmail]             = useState('');
   const [balanceType, setBalanceType] = useState<'owe' | 'owed' | 'none'>('none');
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount]           = useState('');
+  const [note, setNote]               = useState('');
+  const [busy, setBusy]               = useState(false);
+  const [inviteUrl, setInviteUrl]     = useState<string | null>(null);
+  const [copied, setCopied]           = useState(false);
+  const [error, setError]             = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
     const raw = parseFloat(amount) || 0;
     const balance = balanceType === 'owed' ? raw : balanceType === 'owe' ? -raw : 0;
-    addFriend(name.trim(), balance);
-    onClose();
+    setBusy(true);
+    setError(null);
+    const res = await inviteFriend(email.trim().toLowerCase(), balance, note.trim());
+    setBusy(false);
+    if (res.success && res.inviteUrl) {
+      setInviteUrl(res.inviteUrl);
+    } else {
+      setError(res.error ?? 'Something went wrong. Please try again.');
+    }
   };
+
+  const handleCopy = async () => {
+    if (!inviteUrl) return;
+    await navigator.clipboard.writeText(inviteUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleWhatsApp = () => {
+    if (!inviteUrl) return;
+    const msg = encodeURIComponent(`Hey! I've added you on PayMatrix to track our expenses. Click this link to accept: ${inviteUrl}`);
+    window.open(`https://wa.me/?text=${msg}`, '_blank');
+  };
+
+  // Success: show shareable link
+  if (inviteUrl) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#111118] shadow-2xl overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+          <div className="p-6">
+            <div className="text-center mb-5">
+              <div className="mb-3 mx-auto w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                <Share2 className="h-7 w-7 text-emerald-400" />
+              </div>
+              <h2 className="text-lg font-bold text-white">Share this invite link!</h2>
+              <p className="mt-1 text-xs text-slate-400">
+                Send this link to <span className="text-indigo-300 font-medium">{email}</span> via WhatsApp, iMessage, or any app
+              </p>
+            </div>
+
+            {/* Invite link box */}
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3 mb-4">
+              <p className="text-xs text-slate-500 mb-1 font-medium uppercase tracking-wider">Invite Link</p>
+              <p className="text-xs text-indigo-300 break-all font-mono">{inviteUrl}</p>
+            </div>
+
+            {/* Action buttons */}
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <button
+                onClick={handleCopy}
+                className={`flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all border ${copied ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-300' : 'border-white/10 bg-white/5 text-white hover:bg-white/10'}`}
+              >
+                {copied ? <><Check className="h-4 w-4" />Copied!</> : <><Copy className="h-4 w-4" />Copy Link</>}
+              </button>
+              <button
+                onClick={handleWhatsApp}
+                className="flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold border border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-all"
+              >
+                <span className="text-base">💬</span> WhatsApp
+              </button>
+            </div>
+
+            <button onClick={onClose} className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-semibold text-slate-300 hover:bg-white/10 transition-all">
+              Done
+            </button>
+
+            <p className="text-center text-xs text-slate-600 mt-3">
+              Link expires in 7 days · They'll appear in Friends once they accept
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#111118] shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-white/[0.07]">
-          <h2 className="text-lg font-bold text-white">Add a Friend</h2>
+        <div className="h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-white/[0.07]">
+          <div>
+            <h2 className="text-lg font-bold text-white">Add a Friend</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Enter their email to generate a shareable invite link</p>
+          </div>
           <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-white/10 hover:text-white transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {/* Email */}
           <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Friend's Name</label>
-            <input
-              autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Rahul, Priya…"
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition-all"
-            />
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Friend's Email</label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+              <input
+                autoFocus type="email" value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="friend@example.com"
+                className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-4 py-3 text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition-all"
+              />
+            </div>
           </div>
 
+          {/* Balance direction */}
           <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Settlement Status</label>
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Current Balance</label>
             <div className="grid grid-cols-3 gap-2">
               {([
                 { key: 'none', label: 'All Settled', emoji: '✅' },
                 { key: 'owed', label: 'They Owe Me', emoji: '💸' },
-                { key: 'owe', label: 'I Owe Them', emoji: '🤝' },
+                { key: 'owe',  label: 'I Owe Them',  emoji: '🤝' },
               ] as const).map(opt => (
                 <button
                   key={opt.key} type="button" onClick={() => setBalanceType(opt.key)}
@@ -78,18 +170,37 @@ function AddFriendModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
+          {/* Amount */}
           {balanceType !== 'none' && (
             <div>
               <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Amount (₹)</label>
               <input
-                type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00"
+                type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00"
                 className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition-all"
               />
             </div>
           )}
 
-          <button type="submit" className="w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)]">
-            Add Friend →
+          {/* Note */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Note <span className="text-slate-600 normal-case font-normal">(optional)</span></label>
+            <input
+              type="text" value={note} onChange={e => setNote(e.target.value)} placeholder='e.g. "Dinner at Barbeque Nation"'
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition-all"
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-400">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit" disabled={busy || !email.trim()}
+            className="w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {busy ? <><Loader2 className="h-4 w-4 animate-spin" />Creating link...</> : <><Share2 className="h-4 w-4" />Generate Invite Link →</>}
           </button>
         </form>
       </div>
@@ -97,7 +208,7 @@ function AddFriendModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-/* ─── Create Group Modal (Backend synced) ──────── */
+/* ─── Create Group Modal ───────────────────────── */
 function CreateGroupModal({ onClose }: { onClose: () => void }) {
   const { addGroup } = useStore();
   const router = useRouter();
@@ -179,65 +290,93 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
 /* ─── Friend Card ──────────────────────────────── */
 function FriendCard({ friend }: { friend: Friend }) {
   const { settleFriend, unsettleFriend } = useStore();
-  const owes = friend.balance < 0;   // you owe them
-  const owed = friend.balance > 0;   // they owe you
+  const [loading, setLoading] = useState(false);
+  const isPending = friend.status === 'pending';
+  const owes = friend.balance < 0;
+
+  const handleSettle = async () => {
+    setLoading(true);
+    await settleFriend(friend.id);
+    setLoading(false);
+  };
+  const handleUnsettle = async () => {
+    setLoading(true);
+    await unsettleFriend(friend.id);
+    setLoading(false);
+  };
 
   return (
-    <div className={`flex items-center gap-4 rounded-2xl border p-4 transition-all ${friend.settled ? 'border-white/[0.05] bg-white/[0.02] opacity-60' : 'border-white/[0.08] bg-white/[0.04] hover:border-indigo-500/30 hover:bg-white/[0.06]'}`}>
-      <Avatar name={friend.name} color={friend.color} size={10} />
+    <div className={`flex items-center gap-4 rounded-2xl border p-4 transition-all ${
+      isPending ? 'border-amber-500/20 bg-amber-500/[0.04] opacity-70' :
+      friend.settled ? 'border-white/[0.05] bg-white/[0.02] opacity-60' :
+      'border-white/[0.08] bg-white/[0.04] hover:border-indigo-500/30 hover:bg-white/[0.06]'
+    }`}>
+      <Avatar name={friend.name} color={friend.color} size={10} avatar={friend.avatar} />
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-white text-sm truncate">{friend.name}</div>
-        {friend.settled ? (
+        {isPending ? (
+          <div className="flex items-center gap-1 text-xs text-amber-400 mt-0.5">
+            <Clock className="h-3 w-3" /> Invite pending · awaiting acceptance
+          </div>
+        ) : friend.settled ? (
           <div className="text-xs text-slate-500 mt-0.5">✅ All settled up</div>
         ) : friend.balance === 0 ? (
           <div className="text-xs text-slate-500 mt-0.5">No pending balance</div>
         ) : owes ? (
           <div className="text-xs text-rose-400 mt-0.5 font-medium">
             You owe ₹{Math.abs(friend.balance).toLocaleString('en-IN')}
+            {friend.note && <span className="text-slate-600"> · {friend.note}</span>}
           </div>
         ) : (
           <div className="text-xs text-emerald-400 mt-0.5 font-medium">
             Owes you ₹{friend.balance.toLocaleString('en-IN')}
+            {friend.note && <span className="text-slate-600"> · {friend.note}</span>}
           </div>
         )}
       </div>
 
-      {!friend.settled && friend.balance !== 0 && (
+      {!isPending && !friend.settled && friend.balance !== 0 && (
         <div className={`shrink-0 rounded-xl px-3 py-1.5 text-sm font-bold ${owes ? 'bg-rose-500/15 text-rose-400' : 'bg-emerald-500/15 text-emerald-400'}`}>
           {owes ? '-' : '+'}₹{Math.abs(friend.balance).toLocaleString('en-IN')}
         </div>
       )}
 
-      {friend.settled ? (
-        <button
-          onClick={() => unsettleFriend(friend.id)}
-          title="Mark as unsettled"
-          className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300 transition-colors"
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-        </button>
-      ) : (
-        <button
-          onClick={() => settleFriend(friend.id)}
-          title="Mark as settled"
-          className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-        >
-          <CheckCircle2 className="h-3.5 w-3.5" />
-        </button>
+      {!isPending && (
+        friend.settled ? (
+          <button onClick={handleUnsettle} disabled={loading} title="Mark unsettled"
+            className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300 transition-colors disabled:opacity-50">
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+          </button>
+        ) : (
+          <button onClick={handleSettle} disabled={loading} title="Mark as settled"
+            className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50">
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+          </button>
+        )
       )}
     </div>
   );
 }
 
-/* ─── Friends Tab Content ──────────────────────── */
+/* ─── Friends Tab ──────────────────────────────── */
 function FriendsTab({ onAddFriend }: { onAddFriend: () => void }) {
-  const { friends } = useStore();
+  const { friends, friendsLoading } = useStore();
   const safeFriends = Array.isArray(friends) ? friends : [];
-  const active = safeFriends.filter(f => !f.settled);
-  const settled = safeFriends.filter(f => f.settled);
+  const active  = safeFriends.filter(f => !f.settled && f.status === 'accepted');
+  const pending = safeFriends.filter(f => f.status === 'pending');
+  const settled = safeFriends.filter(f => f.settled && f.status === 'accepted');
 
   const totalOwed = active.filter(f => f.balance > 0).reduce((s, f) => s + f.balance, 0);
-  const totalOwe = active.filter(f => f.balance < 0).reduce((s, f) => s + Math.abs(f.balance), 0);
+  const totalOwe  = active.filter(f => f.balance < 0).reduce((s, f) => s + Math.abs(f.balance), 0);
+
+  if (friendsLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32">
+        <Loader2 className="h-10 w-10 animate-spin text-indigo-500 mb-4" />
+        <p className="text-slate-400 text-sm">Loading your friends...</p>
+      </div>
+    );
+  }
 
   if (safeFriends.length === 0) {
     return (
@@ -246,12 +385,12 @@ function FriendsTab({ onAddFriend }: { onAddFriend: () => void }) {
           <UserCircle2 className="h-10 w-10 text-indigo-400" />
         </div>
         <h2 className="text-2xl font-bold text-white">No friends yet</h2>
-        <p className="mt-2 max-w-sm text-slate-400">Add a friend to start tracking individual balances — who owes you, and who you owe.</p>
+        <p className="mt-2 max-w-sm text-slate-400">Send an invite to a friend's email — they'll get a link to join and you can start tracking balances together.</p>
         <button
           onClick={onAddFriend}
           className="mt-8 flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white hover:bg-indigo-500 transition-all"
         >
-          <UserPlus className="h-4 w-4" /> Add Friend
+          <UserPlus className="h-4 w-4" /> Invite a Friend
         </button>
       </div>
     );
@@ -259,93 +398,97 @@ function FriendsTab({ onAddFriend }: { onAddFriend: () => void }) {
 
   return (
     <div className="space-y-8">
+      {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
           <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Friends owe you</div>
           <div className="text-2xl font-extrabold text-emerald-400">₹{totalOwed.toLocaleString('en-IN')}</div>
-          <div className="text-xs text-slate-600 mt-0.5">{active.filter(f => f.balance > 0).length} pending</div>
+          <div className="text-xs text-slate-600 mt-0.5">{active.filter(f => f.balance > 0).length} friend{active.filter(f => f.balance > 0).length !== 1 ? 's' : ''}</div>
         </div>
         <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.06] p-4">
           <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">You owe friends</div>
           <div className="text-2xl font-extrabold text-rose-400">₹{totalOwe.toLocaleString('en-IN')}</div>
-          <div className="text-xs text-slate-600 mt-0.5">{active.filter(f => f.balance < 0).length} pending</div>
+          <div className="text-xs text-slate-600 mt-0.5">{active.filter(f => f.balance < 0).length} friend{active.filter(f => f.balance < 0).length !== 1 ? 's' : ''}</div>
         </div>
       </div>
 
+      {/* Active */}
       {active.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Pending</h3>
-            <span className="text-xs text-slate-600">{active.length} friend{active.length !== 1 ? 's' : ''}</span>
+            <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Active</h3>
+            <span className="text-xs text-slate-600">{active.length}</span>
           </div>
-          <div className="space-y-3">
-            {active.map(f => <FriendCard key={f.id} friend={f} />)}
-          </div>
+          <div className="space-y-3">{active.map(f => <FriendCard key={f.id} friend={f} />)}</div>
         </div>
       )}
 
-      <button
-        onClick={onAddFriend}
-        className="w-full flex items-center justify-center gap-2 rounded-2xl border border-dashed border-indigo-500/30 bg-indigo-500/[0.04] py-4 text-sm font-semibold text-indigo-400 hover:bg-indigo-500/[0.08] hover:border-indigo-500/50 transition-all"
-      >
-        <UserPlus className="h-4 w-4" /> Add More Friends
+      {/* Pending invites */}
+      {pending.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-amber-500/70 uppercase tracking-wider flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5" /> Pending Invites
+            </h3>
+            <span className="text-xs text-slate-600">{pending.length}</span>
+          </div>
+          <div className="space-y-3">{pending.map(f => <FriendCard key={f.id} friend={f} />)}</div>
+        </div>
+      )}
+
+      {/* Add more */}
+      <button onClick={onAddFriend}
+        className="w-full flex items-center justify-center gap-2 rounded-2xl border border-dashed border-indigo-500/30 bg-indigo-500/[0.04] py-4 text-sm font-semibold text-indigo-400 hover:bg-indigo-500/[0.08] hover:border-indigo-500/50 transition-all">
+        <UserPlus className="h-4 w-4" /> Invite More Friends
       </button>
 
+      {/* Settled */}
       {settled.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Previously Settled</h3>
+            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Settled</h3>
             <span className="text-xs text-slate-600">{settled.length}</span>
           </div>
-          <div className="space-y-2">
-            {settled.map(f => <FriendCard key={f.id} friend={f} />)}
-          </div>
+          <div className="space-y-2">{settled.map(f => <FriendCard key={f.id} friend={f} />)}</div>
         </div>
       )}
     </div>
   );
 }
 
-/* ─── Groups Tab Content ───────────────────────── */
+/* ─── Groups Tab ───────────────────────────────── */
 function GroupsTab({ onCreateGroup }: { onCreateGroup: () => void }) {
   const { groups, expenses, loading } = useStore();
   const totalExpenses = expenses.length;
   const totalAmount = expenses.reduce((s, e) => s + e.amount, 0);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-32">
-        <Loader2 className="h-10 w-10 animate-spin text-indigo-500 mb-4" />
-        <p className="text-slate-400 text-sm">Loading your groups from database...</p>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-32">
+      <Loader2 className="h-10 w-10 animate-spin text-indigo-500 mb-4" />
+      <p className="text-slate-400 text-sm">Loading your groups from database...</p>
+    </div>
+  );
 
-  if (groups.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-indigo-500/10 border border-indigo-500/20">
-          <Users className="h-10 w-10 text-indigo-400" />
-        </div>
-        <h2 className="text-2xl font-bold text-white">No groups yet</h2>
-        <p className="mt-2 max-w-sm text-slate-400">Create your first group to start splitting expenses and tracking who owes who.</p>
-        <button
-          onClick={onCreateGroup}
-          className="mt-8 flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white hover:bg-indigo-500 transition-all"
-        >
-          <Plus className="h-4 w-4" /> Create Group
-        </button>
+  if (groups.length === 0) return (
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-indigo-500/10 border border-indigo-500/20">
+        <Users className="h-10 w-10 text-indigo-400" />
       </div>
-    );
-  }
+      <h2 className="text-2xl font-bold text-white">No groups yet</h2>
+      <p className="mt-2 max-w-sm text-slate-400">Create a group to start splitting expenses with multiple people.</p>
+      <button onClick={onCreateGroup} className="mt-8 flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white hover:bg-indigo-500 transition-all">
+        <Plus className="h-4 w-4" /> Create Group
+      </button>
+    </div>
+  );
 
   return (
     <>
       <div className="mb-8 grid grid-cols-3 gap-4">
         {[
-          { label: 'Groups',   value: groups.length, icon: Users, color: 'text-indigo-400' },
-          { label: 'Expenses', value: totalExpenses, icon: Receipt, color: 'text-emerald-400' },
-          { label: 'Total',    value: `₹${totalAmount.toLocaleString('en-IN')}`, icon: TrendingUp, color: 'text-violet-400' },
+          { label: 'Groups',   value: groups.length,                              icon: Users,      color: 'text-indigo-400'  },
+          { label: 'Expenses', value: totalExpenses,                              icon: Receipt,    color: 'text-emerald-400' },
+          { label: 'Total',    value: `₹${totalAmount.toLocaleString('en-IN')}`,  icon: TrendingUp, color: 'text-violet-400'  },
         ].map(s => (
           <div key={s.label} className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-4">
             <div className={`mb-1 ${s.color}`}><s.icon className="h-4 w-4" /></div>
@@ -375,9 +518,7 @@ function GroupsTab({ onCreateGroup }: { onCreateGroup: () => void }) {
                     <Avatar key={m.id} name={m.name} color={m.color} size={7} />
                   ))}
                   {group.members.length > 5 && (
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs text-slate-400">
-                      +{group.members.length - 5}
-                    </div>
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs text-slate-400">+{group.members.length - 5}</div>
                   )}
                 </div>
                 <div className="flex items-center justify-between text-sm">
@@ -393,24 +534,21 @@ function GroupsTab({ onCreateGroup }: { onCreateGroup: () => void }) {
   );
 }
 
-/* ─── Dashboard Page Wrapper ───────────────────── */
+/* ─── Dashboard Page ───────────────────────────── */
 export default function DashboardPage() {
-  const [tab, setTab] = useState<Tab>('friends');
-  const [showCreate, setShowCreate] = useState(false);
+  const [tab, setTab]                 = useState<Tab>('friends');
+  const [showCreate, setShowCreate]   = useState(false);
   const [showAddFriend, setShowAddFriend] = useState(false);
 
-  // Sync Clerk user with backend
-  useEffect(() => { syncUser(); }, []);
+  useEffect(() => { syncUser().catch(console.error); }, []);
 
   return (
     <div className="min-h-screen bg-[#07070f] text-white">
-      {/* Background Glow */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-32 left-1/4 w-[500px] h-[500px] rounded-full bg-indigo-700/15 blur-[120px]" />
         <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] rounded-full bg-violet-700/10 blur-[120px]" />
       </div>
 
-      {/* Nav */}
       <nav className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#07070f]/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-5 sm:px-8">
           <Link href="/" className="text-lg font-bold">
@@ -433,23 +571,20 @@ export default function DashboardPage() {
       </nav>
 
       <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8">
-        {/* Header & Tabs Switcher */}
         <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-extrabold text-white">
               {tab === 'friends' ? 'Friends' : 'My Groups'}
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              {tab === 'friends' ? 'Track individual balances with friends' : 'Manage your shared expenses and settle up (Cloud Synced)'}
+              {tab === 'friends' ? 'Track individual balances & send invites via email' : 'Manage shared expenses — synced to MongoDB'}
             </p>
           </div>
 
           <div className="flex rounded-xl border border-white/[0.08] bg-white/[0.03] p-1 gap-1">
             {(['friends', 'groups'] as const).map(t => (
-              <button
-                key={t} onClick={() => setTab(t)}
-                className={`flex items-center justify-center flex-1 sm:flex-none gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition-all capitalize ${tab === t ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/[0.05]'}`}
-              >
+              <button key={t} onClick={() => setTab(t)}
+                className={`flex items-center justify-center flex-1 sm:flex-none gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition-all capitalize ${tab === t ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/[0.05]'}`}>
                 {t === 'friends' ? <UserCircle2 className="h-4 w-4" /> : <Users className="h-4 w-4" />}
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
@@ -457,16 +592,14 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Selected Tab Content */}
-        {tab === 'friends' ? (
-          <FriendsTab onAddFriend={() => setShowAddFriend(true)} />
-        ) : (
-          <GroupsTab onCreateGroup={() => setShowCreate(true)} />
-        )}
+        {tab === 'friends'
+          ? <FriendsTab onAddFriend={() => setShowAddFriend(true)} />
+          : <GroupsTab onCreateGroup={() => setShowCreate(true)} />
+        }
       </div>
 
       {showAddFriend && <AddFriendModal onClose={() => setShowAddFriend(false)} />}
-      {showCreate && <CreateGroupModal onClose={() => setShowCreate(false)} />}
+      {showCreate    && <CreateGroupModal onClose={() => setShowCreate(false)} />}
     </div>
   );
 }
