@@ -6,6 +6,7 @@ export interface ISettlementRecord extends Document {
   from: string;    // member id
   to: string;      // member id
   amount: number;
+  paymentTransactionId?: string;
   paidAt: Date;
   createdAt: Date;
 }
@@ -16,6 +17,7 @@ const SettlementRecordSchema = new Schema<ISettlementRecord>(
     from:    { type: String, required: true },
     to:      { type: String, required: true },
     amount:  { type: Number, required: true },
+    paymentTransactionId: { type: String },
     paidAt:  { type: Date, default: Date.now },
   },
   { timestamps: true }

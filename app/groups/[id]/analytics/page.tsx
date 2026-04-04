@@ -80,10 +80,16 @@ function BudgetModal({ initialBudget, onClose, onSave }: { initialBudget?: numbe
 
 export default function AnalyticsPage() {
   const { id } = useParams<{ id: string }>();
-  const { getGroup, getGroupExpenses, updateGroupBudget } = useStore();
+  
+  // MERGED STORE STATE
+  const { getGroup, getGroupExpenses, getGroupSettlements, getGroupPayments, updateGroupBudget } = useStore();
+  const [viewMode, setViewMode] = useState<'initial' | 'current'>('initial');
   const [showBudgetModal, setShowBudgetModal] = useState(false);
+  
   const group = getGroup(id);
   const expenses = getGroupExpenses(id);
+  const settlements = getGroupSettlements(id);
+  const payments = getGroupPayments(id);
 
   // ── Category breakdown ─────────────────────────────────────────────────────
   const categoryData = useMemo(() => {
@@ -100,21 +106,33 @@ export default function AnalyticsPage() {
     let topSpender = null;
     let mvpSaver = null;
     let maxPaid = -1;
-    let maxSumOwedToThem = -1; // the person who covered others the most
+    let maxSumOwedToThem = -1; 
 
     const md = group.members.map(m => {
-      const paid = expenses.filter(e => e.paidBy === m.id).reduce((s, e) => s + e.amount, 0);
-      const owed = expenses.reduce((s, e) => {
+      let paid = expenses.filter(e => e.paidBy === m.id).reduce((s, e) => s + e.amount, 0);
+      let owed = expenses.reduce((s, e) => {
         const split = e.splits.find(sp => sp.memberId === m.id);
         return s + (split?.amount || 0);
       }, 0);
 
+      // Superlatives logic triggers based on initial debts
       if (paid > maxPaid) { maxPaid = paid; topSpender = m; }
       
       const net = paid - owed;
       if (net > maxSumOwedToThem) { maxSumOwedToThem = net; mvpSaver = m; }
 
-      return { name: m.name, Paid: Math.round(paid), Owed: Math.round(owed), color: m.color };
+      // View Mode Toggle (Net off settlements if enabled)
+      if (viewMode === 'current') {
+        const manualSettlementPaid = settlements.filter(s => s.from === m.id && !s.paymentTransactionId).reduce((s, e) => s + e.amount, 0);
+        const manualSettlementReceived = settlements.filter(s => s.to === m.id && !s.paymentTransactionId).reduce((s, e) => s + e.amount, 0);
+        const realPaymentPaid = payments.filter(p => p.from === m.id && p.status === 'success').reduce((s, e) => s + e.amount, 0);
+        const realPaymentReceived = payments.filter(p => p.to === m.id && p.status === 'success').reduce((s, e) => s + e.amount, 0);
+
+        owed -= (manualSettlementPaid + realPaymentPaid);
+        paid -= (manualSettlementReceived + realPaymentReceived);
+      }
+
+      return { name: m.name, Paid: Math.max(0, Math.round(paid)), Owed: Math.max(0, Math.round(owed)), color: m.color };
     });
 
     return { 
@@ -124,7 +142,7 @@ export default function AnalyticsPage() {
         mvpSaver: maxSumOwedToThem > 0 ? mvpSaver : null
       }
     };
-  }, [group, expenses]);
+  }, [group, expenses, settlements, payments, viewMode]);
 
   // ── Monthly trend & Predictor ──────────────────────────────────────────────
   const monthlyData = useMemo(() => {
@@ -183,6 +201,24 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6">
       
+      {/* ── View Toggle Module ─────────────────────────────────────────── */}
+      <div className="flex justify-center mt-2 mb-2">
+        <div className="inline-flex rounded-xl bg-white/5 p-1 border border-white/10">
+          <button
+            onClick={() => setViewMode('initial')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${viewMode === 'initial' ? 'bg-indigo-500/20 text-indigo-300 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            Original Structure
+          </button>
+          <button
+            onClick={() => setViewMode('current')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${viewMode === 'current' ? 'bg-emerald-500/20 text-emerald-300 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            Current Scenario
+          </button>
+        </div>
+      </div>
+
       {/* ── Budget & Gamification Row ──────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Budget Module */}

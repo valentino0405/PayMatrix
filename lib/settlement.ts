@@ -23,6 +23,8 @@ export function calculateSettlements(
   netBalances: Record<string, number>,
   members: Member[],
 ): Transaction[] {
+  if (!members || members.length === 0) return [];
+
   const bal = members.map(m => ({
     id: m.id,
     amount: Math.round((netBalances[m.id] || 0) * 100) / 100,

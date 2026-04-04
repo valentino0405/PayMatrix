@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
-import { ArrowLeft, Copy, Check, Zap, BarChart3, Scale, ListTodo, PieChart, Bell, X } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Zap, BarChart3, Scale, ListTodo, PieChart, Bell, X, CreditCard } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useStore } from '@/lib/store';
 import { calculateSettlements } from '@/lib/settlement';
@@ -10,6 +10,7 @@ const TABS = [
   { label: 'Expenses',   href: '',           icon: ListTodo  },
   { label: 'Balances',   href: '/balances',  icon: Scale     },
   { label: 'Settle ⚡',  href: '/settle',    icon: Zap       },
+  { label: 'Payments',   href: '/payments',  icon: CreditCard },
   { label: 'Analytics',  href: '/analytics', icon: PieChart  },
   { label: 'Graph',      href: '/graph',     icon: BarChart3 },
 ];
@@ -27,6 +28,8 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
   const expenses = getGroupExpenses(id);
   const netBalances = getNetBalances(id);
   
+  // MERGED STATE LOGIC
+  const members = useMemo(() => group?.members ?? [], [group]);
   const settlements = useMemo(() => {
     return group ? calculateSettlements(netBalances, group.members) : [];
   }, [group, netBalances]);
@@ -38,8 +41,8 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
 
     // Debt notifications
     settlements.forEach((txn, i) => {
-      const from = group.members.find(m => m.id === txn.from);
-      const to   = group.members.find(m => m.id === txn.to);
+      const from = members.find(m => m.id === txn.from);
+      const to   = members.find(m => m.id === txn.to);
       notifs.push({
         id: `debt-${i}`,
         type: 'debt',
@@ -51,7 +54,7 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
     // Recent expense notifications (last 3)
     const recent = [...expenses].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3);
     recent.forEach(e => {
-      const payer = group.members.find(m => m.id === e.paidBy);
+      const payer = members.find(m => m.id === e.paidBy);
       notifs.push({
         id: `exp-${e.id}`,
         type: 'expense',
@@ -61,22 +64,25 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
     });
 
     return notifs;
-  }, [settlements, expenses, group]);
+  }, [settlements, expenses, members, group]);
+
+  // MERGED ROUTING LOGIC
+  if (!group) { 
+    router.replace('/dashboard'); 
+    return null; 
+  }
 
   const handleCopyInvite = async () => {
-    if (!group) return;
     try {
       await navigator.clipboard.writeText(`Join my group "${group.name}" on PayMatrix! Code: ${group.inviteCode}`);
       setCopied(true); setTimeout(() => setCopied(false), 2000);
     } catch {}
   };
 
-  if (!group) return null;
-
   return (
     <div className="min-h-screen bg-[#07070f] text-white">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-indigo-700/10 blur-[120px]" />
+        <div className="absolute -top-40 -right-40 w-125 h-125 rounded-full bg-indigo-700/10 blur-[120px]" />
       </div>
 
       <header className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#07070f]/90 backdrop-blur-xl">
@@ -124,7 +130,7 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
                     <span className="text-sm font-bold text-white">Notifications</span>
                     <button onClick={() => setShowNotif(false)} className="text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
                   </div>
-                  <div className="max-h-72 overflow-y-auto divide-y divide-white/[0.05]">
+                  <div className="max-h-72 overflow-y-auto divide-y divide-white/5">
                     {notifications.length === 0 ? (
                       <div className="px-4 py-6 text-center text-xs text-slate-500">All caught up! 🎉</div>
                     ) : notifications.map(n => (

@@ -2,7 +2,7 @@
 import { useParams } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import { calculateSettlements } from '@/lib/settlement';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 const NODE_R = 28;
 const W = 480;
@@ -73,9 +73,10 @@ function Arrow({ x1, y1, x2, y2, amount, color, markerIndex }: { x1: number; y1:
 export default function GraphPage() {
   const { id } = useParams<{ id: string }>();
   const { getGroup, getNetBalances } = useStore();
+  const [viewMode, setViewMode] = useState<'initial' | 'current'>('initial');
 
   const group = getGroup(id);
-  const netBalances = getNetBalances(id);
+  const netBalances = getNetBalances(id, viewMode === 'current');
   const transactions = useMemo(
     () => (group ? calculateSettlements(netBalances, group.members) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -97,6 +98,23 @@ export default function GraphPage() {
         </p>
       </div>
 
+      <div className="flex justify-center mb-6">
+        <div className="inline-flex rounded-xl bg-white/5 p-1 border border-white/10">
+          <button
+            onClick={() => setViewMode('initial')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${viewMode === 'initial' ? 'bg-indigo-500/20 text-indigo-300 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            Original Structure
+          </button>
+          <button
+            onClick={() => setViewMode('current')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${viewMode === 'current' ? 'bg-emerald-500/20 text-emerald-300 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            Current Scenario
+          </button>
+        </div>
+      </div>
+
       {group.members.length < 2 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="text-4xl mb-3">👥</div>
@@ -108,7 +126,7 @@ export default function GraphPage() {
           <p className="font-bold text-emerald-400 text-lg">All settled up!</p>
           <p className="text-slate-400 text-sm mt-1">No payment arrows to show — everyone is square.</p>
           {/* Still render the member nodes */}
-          <div className="mt-6 w-full max-w-md mx-auto overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02]">
+          <div className="mt-6 w-full max-w-md mx-auto overflow-hidden rounded-2xl border border-white/[0.07] bg-white/2">
             <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
               {positions.map((pos, i) => {
                 const m = group.members[i];
@@ -213,7 +231,7 @@ export default function GraphPage() {
               const from = group.members[getMemberIndex(txn.from)];
               const to = group.members[getMemberIndex(txn.to)];
               return (
-                <div key={i} className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
+                <div key={i} className="rounded-xl border border-white/[0.07] bg-white/3 p-3">
                   <div className="flex items-center gap-1 mb-1">
                     <span className="text-[11px] font-bold" style={{ color: from?.color }}>{from?.name}</span>
                     <span className="text-slate-500 text-xs">→</span>

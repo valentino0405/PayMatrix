@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Plus, X, Trash2, UtensilsCrossed, Plane, Home, PartyPopper, ShoppingBag, Zap, Heart, MoreHorizontal, Search, Filter, Sparkles, AlertTriangle, Mic } from 'lucide-react';
 import { useStore, Category, SplitType, Member } from '@/lib/store';
@@ -189,6 +189,7 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div>
+            {/* RESOLVED CONFLICT: Kept the Smart Voice Navigation & Highlight Chips */}
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Description & Smart Input</label>
             <div className="relative">
               <input autoFocus value={desc} onChange={e => handleDescChange(e.target.value)}
@@ -241,7 +242,7 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
             <div className="grid grid-cols-4 gap-1.5">
               {CATEGORIES.map(c => (
                 <button key={c} type="button" onClick={() => setCategory(c)}
-                  className={`rounded-xl py-2 text-xs font-semibold transition-all border flex flex-col items-center gap-0.5 ${category === c ? 'border-white/30 bg-white/10 text-white' : 'border-white/[0.06] bg-white/[0.03] text-slate-400 hover:bg-white/[0.07]'}`}>
+                  className={`rounded-xl py-2 text-xs font-semibold transition-all border flex flex-col items-center gap-0.5 ${category === c ? 'border-white/30 bg-white/10 text-white' : 'border-white/6 bg-white/3 text-slate-400 hover:bg-white/[0.07]'}`}>
                   <span className="text-base">{CATEGORY_META[c].emoji}</span>
                   <span className="truncate">{c}</span>
                 </button>
@@ -329,16 +330,14 @@ export default function GroupExpensesPage() {
   const totalAmount = expenses.reduce((s, e) => s + e.amount, 0);
 
   // ── Filtering ──────────────────────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    return [...expenses]
-      .filter(e => {
-        if (search && !e.description.toLowerCase().includes(search.toLowerCase())) return false;
-        if (filterCategory !== 'All' && e.category !== filterCategory) return false;
-        if (filterMember !== 'All' && e.paidBy !== filterMember) return false;
-        return true;
-      })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [expenses, search, filterCategory, filterMember]);
+  const filtered = [...expenses]
+    .filter(e => {
+      if (search && !e.description.toLowerCase().includes(search.toLowerCase())) return false;
+      if (filterCategory !== 'All' && e.category !== filterCategory) return false;
+      if (filterMember !== 'All' && e.paidBy !== filterMember) return false;
+      return true;
+    })
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const getMember = (mid: string) => group.members.find(m => m.id === mid);
   const activeFilters = [filterCategory !== 'All', filterMember !== 'All', search !== ''].filter(Boolean).length;
@@ -353,7 +352,7 @@ export default function GroupExpensesPage() {
             { label: 'Transactions', value: expenses.length },
             { label: 'Members', value: group.members.length },
           ].map(s => (
-            <div key={s.label} className="rounded-xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 flex-1 min-w-[120px]">
+            <div key={s.label} className="rounded-xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 flex-1 min-w-30">
               <div className="text-xs text-slate-500 mb-0.5">{s.label}</div>
               <div className="text-lg font-extrabold text-white">{s.value}</div>
             </div>
@@ -380,7 +379,7 @@ export default function GroupExpensesPage() {
           </div>
 
           {showFilters && (
-            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4 space-y-3">
+            <div className="rounded-2xl border border-white/[0.07] bg-white/3 p-4 space-y-3">
               {/* Category filter */}
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Category</label>
@@ -432,6 +431,7 @@ export default function GroupExpensesPage() {
           {filtered.map(expense => {
             const payer = getMember(expense.paidBy);
             const cat = CATEGORY_META[expense.category];
+            // RESOLVED CONFLICT: Included the suspicious expense styling
             return (
               <div key={expense.id} className={`group relative rounded-2xl border p-4 transition-all hover:bg-white/[0.05] ${expense.isSuspicious ? 'border-rose-500/40 bg-rose-500/5 hover:border-rose-500/60' : 'border-white/[0.07] bg-white/[0.035] hover:border-white/15'}`}>
                 <div className="flex items-start gap-3">
@@ -497,7 +497,7 @@ export default function GroupExpensesPage() {
       )}
 
       {/* FAB */}
-      <button onClick={() => setShowAdd(true)}
+      <button onClick={() => setShowAdd(true)} id="add-expense-btn"
         className="fixed bottom-6 right-6 flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3.5 text-sm font-bold text-white shadow-[0_8px_32px_rgba(99,102,241,0.5)] hover:bg-indigo-500 transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_40px_rgba(99,102,241,0.6)] z-30">
         <Plus className="h-5 w-5" /> Add Expense
       </button>
