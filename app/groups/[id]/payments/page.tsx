@@ -95,7 +95,7 @@ export default function PaymentsPage() {
       <div className="flex flex-wrap items-end justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
         <div>
           <h2 className="text-xl font-extrabold text-white">Payment History</h2>
-          <p className="text-xs text-slate-400">Dummy UPI logs with reminder and location data from MongoDB</p>
+          <p className="text-xs text-slate-400">UPI logs with reminder and location details</p>
         </div>
         <button
           onClick={fetchRows}

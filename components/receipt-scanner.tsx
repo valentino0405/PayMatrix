@@ -399,8 +399,8 @@ export default function ReceiptScanner() {
         className={[
           'relative flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-10 transition-colors',
           dragging
-            ? 'border-indigo-400 bg-indigo-50'
-            : 'border-slate-300 bg-white hover:border-indigo-300 hover:bg-indigo-50/40',
+            ? 'border-indigo-500/60 bg-indigo-500/10'
+            : 'border-white/15 bg-white/[0.03] hover:border-indigo-500/50 hover:bg-white/[0.06]',
         ].join(' ')}
       >
         <input
@@ -428,7 +428,7 @@ export default function ReceiptScanner() {
               id="receipt-clear-btn"
               type="button"
               onClick={(e) => { e.stopPropagation(); handleClear(); }}
-              className="absolute right-3 top-3 rounded-full bg-slate-100 p-1 text-slate-500 hover:bg-red-50 hover:text-red-500"
+              className="absolute right-3 top-3 rounded-full bg-white/10 p-1 text-slate-300 hover:bg-rose-500/20 hover:text-rose-400"
               aria-label="Remove image"
             >
               <X className="h-4 w-4" />
@@ -436,14 +436,14 @@ export default function ReceiptScanner() {
           </>
         ) : (
           <>
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-400">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-300">
               <Upload className="h-6 w-6" />
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium text-slate-700">
+              <p className="text-sm font-medium text-white">
                 Drag &amp; drop a receipt image here
               </p>
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-slate-500">
                 or click to browse — JPEG, PNG, WEBP supported
               </p>
             </div>
@@ -466,12 +466,12 @@ export default function ReceiptScanner() {
 
       {/* ── Progress ── */}
       {scanning && (
-        <div id="receipt-progress" className="space-y-2 rounded-2xl border border-slate-200 bg-white p-5">
-          <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+        <div id="receipt-progress" className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.04] p-5">
+          <div className="flex items-center gap-2 text-sm font-medium text-white">
             <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
             {progressLabel || 'Processing…'}
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
             <div
               className="h-full rounded-full bg-indigo-500 transition-all duration-300"
               style={{ width: `${progress}%` }}
@@ -482,15 +482,15 @@ export default function ReceiptScanner() {
 
       {/* ── Error ── */}
       {error && (
-        <p id="receipt-error" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
+        <p id="receipt-error" className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
           {error}
         </p>
       )}
 
       {/* ── Results ── */}
       {parsed && (
-        <div id="receipt-results" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
-          <div className="flex items-center gap-2 text-emerald-600">
+        <div id="receipt-results" className="space-y-5 rounded-2xl border border-white/10 bg-white/[0.04] p-6 shadow-sm">
+          <div className="flex items-center gap-2 text-emerald-400">
             <CheckCircle2 className="h-5 w-5" />
             <h2 className="font-semibold">Receipt Scanned Successfully</h2>
           </div>
@@ -502,10 +502,10 @@ export default function ReceiptScanner() {
               { label: 'Date', value: parsed.date, id: 'result-date' },
               { label: 'Description', value: descriptionInput, id: 'result-description' },
             ].map(({ label, value, id }) => (
-              <div key={label} className="rounded-xl bg-slate-50 px-4 py-3">
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-400">{label}</p>
-                <p id={id} className="mt-1 truncate text-sm font-semibold text-slate-800">
-                  {value || <span className="font-normal italic text-slate-400">Not detected</span>}
+              <div key={label} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{label}</p>
+                <p id={id} className="mt-1 truncate text-sm font-semibold text-white">
+                  {value || <span className="font-normal italic text-slate-500">Not detected</span>}
                 </p>
               </div>
             ))}
@@ -514,23 +514,23 @@ export default function ReceiptScanner() {
           {/* Editable fields + group binding */}
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="space-y-1">
-              <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Amount (INR)</span>
+              <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Amount (INR)</span>
               <input
                 type="number"
                 min="0"
                 step="0.01"
                 value={amountInput}
                 onChange={(e) => setAmountInput(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/60"
               />
             </label>
             <label className="space-y-1">
-              <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Group</span>
+              <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Group</span>
               <select
                 value={selectedGroupId}
                 onChange={(e) => handleGroupChange(e.target.value)}
                 disabled={isGroupLocked}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/60 disabled:opacity-70"
               >
                 <option value="">Select a group</option>
                 {groups.map((group) => (
@@ -544,11 +544,11 @@ export default function ReceiptScanner() {
           </div>
 
           {!isGroupLocked && (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
             <button
               type="button"
               onClick={() => setShowCreateGroup((v) => !v)}
-              className="text-sm font-semibold text-indigo-600 hover:text-indigo-500"
+              className="text-sm font-semibold text-indigo-300 hover:text-indigo-200"
             >
               {showCreateGroup ? 'Hide quick create group' : 'No matching group? Create one from Scan'}
             </button>
@@ -557,20 +557,20 @@ export default function ReceiptScanner() {
               <div className="mt-3 space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="space-y-1">
-                    <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Group name</span>
+                    <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Group name</span>
                     <input
                       value={newGroupName}
                       onChange={(e) => setNewGroupName(e.target.value)}
-                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/60"
                       placeholder="e.g. Office Lunch"
                     />
                   </label>
                   <label className="space-y-1">
-                    <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Type</span>
+                    <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Type</span>
                     <select
                       value={newGroupType}
                       onChange={(e) => setNewGroupType(e.target.value as GroupType)}
-                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/60"
                     >
                       {GROUP_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                     </select>
@@ -578,20 +578,20 @@ export default function ReceiptScanner() {
                 </div>
 
                 <div className="space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Members (min 2)</p>
+                  <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Members (min 2)</p>
                   {newMembers.map((m, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <input
                         value={m.name}
                         onChange={(e) => setNewMembers((prev) => prev.map((x, idx) => idx === i ? { ...x, name: e.target.value } : x))}
-                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+                        className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/60"
                         placeholder={`Member ${i + 1} name`}
                       />
                       {newMembers.length > 2 && (
                         <button
                           type="button"
                           onClick={() => setNewMembers((prev) => prev.filter((_, idx) => idx !== i))}
-                          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 hover:text-rose-500"
+                          className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-slate-400 hover:text-rose-400"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -604,7 +604,7 @@ export default function ReceiptScanner() {
                   <button
                     type="button"
                     onClick={() => setNewMembers((prev) => [...prev, { name: '' }])}
-                    className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10"
                   >
                     <Plus className="h-3.5 w-3.5" /> Add member
                   </button>
@@ -623,23 +623,23 @@ export default function ReceiptScanner() {
           )}
 
           <label className="space-y-1 block">
-            <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Description</span>
+            <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Description</span>
             <input
               type="text"
               value={descriptionInput}
               onChange={(e) => setDescriptionInput(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/60"
             />
           </label>
 
           {selectedGroup && (
-            <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
               <label className="space-y-1 block">
-                <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Paid by</span>
+                <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Paid by</span>
                 <select
                   value={selectedPayerId}
                   onChange={(e) => setSelectedPayerId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/60"
                 >
                   {selectedGroup.members.map((m) => (
                     <option key={m.id} value={m.id}>{m.name}</option>
@@ -648,14 +648,14 @@ export default function ReceiptScanner() {
               </label>
 
               <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Split mode</p>
+                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Split mode</p>
                 <div className="grid grid-cols-3 gap-2">
                   {(['equal', 'unequal', 'percentage'] as SplitType[]).map((mode) => (
                     <button
                       key={mode}
                       type="button"
                       onClick={() => handleSplitTypeChange(mode)}
-                      className={`rounded-lg border px-2 py-2 text-xs font-semibold capitalize transition-all ${splitType === mode ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-100'}`}
+                      className={`rounded-lg border px-2 py-2 text-xs font-semibold capitalize transition-all ${splitType === mode ? 'border-indigo-500/60 bg-indigo-500/20 text-indigo-300' : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'}`}
                     >
                       {mode}
                     </button>
@@ -664,12 +664,12 @@ export default function ReceiptScanner() {
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Split members</p>
+                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Split members</p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {selectedGroup.members.map((m) => {
                     const checked = selectedMemberIds.includes(m.id);
                     return (
-                      <label key={m.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                      <label key={m.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200">
                         <input
                           type="checkbox"
                           checked={checked}
@@ -704,12 +704,12 @@ export default function ReceiptScanner() {
 
               {splitType !== 'equal' && selectedMemberIds.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
                     {splitType === 'percentage' ? 'Percentage per member' : 'Amount per member'}
                   </p>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {selectedGroup.members.filter((m) => selectedMemberIds.includes(m.id)).map((m) => (
-                      <label key={m.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                      <label key={m.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200">
                         <span className="min-w-0 flex-1 truncate">{m.name}</span>
                         <input
                           type="number"
@@ -717,7 +717,7 @@ export default function ReceiptScanner() {
                           step="0.01"
                           value={splitInputs[m.id] ?? ''}
                           onChange={(e) => setSplitInputs((prev) => ({ ...prev, [m.id]: e.target.value }))}
-                          className="w-24 rounded-md border border-slate-300 px-2 py-1 text-right text-xs outline-none focus:border-indigo-400"
+                          className="w-24 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-right text-xs text-white outline-none focus:border-indigo-500/60"
                         />
                         <span className="text-xs text-slate-500">{splitType === 'percentage' ? '%' : 'INR'}</span>
                       </label>
@@ -730,10 +730,10 @@ export default function ReceiptScanner() {
 
           {/* Raw text collapsible */}
           <details className="text-sm">
-            <summary className="cursor-pointer select-none text-slate-400 hover:text-slate-600">
+            <summary className="cursor-pointer select-none text-slate-400 hover:text-slate-300">
               Show raw extracted text
             </summary>
-            <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+            <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs leading-relaxed text-slate-300">
               {rawText}
             </pre>
           </details>
@@ -753,14 +753,14 @@ export default function ReceiptScanner() {
               id="receipt-rescan-btn"
               type="button"
               onClick={handleClear}
-              className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              className="rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-white/10"
             >
               Scan Another
             </button>
             <Link
               id="receipt-home-btn"
               href="/"
-              className="flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              className="flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-white/10"
             >
               🏠 Back to Home
             </Link>

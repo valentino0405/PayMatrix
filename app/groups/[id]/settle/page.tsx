@@ -54,7 +54,7 @@ export default function SettlePage() {
   const group = getGroup(id);
   const expenses = getGroupExpenses(id);
 
-  // ── Fetch existing paid records from MongoDB ────────────────────────────────
+  // ── Fetch existing paid records ─────────────────────────────────────────────
   useEffect(() => {
     Promise.all([
       fetch(`/api/groups/${id}/settlements`).then(r => (r.ok ? r.json() : [])),
@@ -219,7 +219,7 @@ export default function SettlePage() {
 
             const remainingAfter = Number(verifyData?.remaining ?? Math.max(0, remaining - payAmount));
             if (remainingAfter <= 0) {
-              setFeedback({ type: 'success', text: 'Payment successful. Fully settled and saved to database.' });
+              setFeedback({ type: 'success', text: 'Payment successful. Fully settled.' });
             } else {
               setFeedback({ type: 'success', text: `Payment successful. ₹${remainingAfter.toFixed(2)} still remaining.` });
             }
@@ -291,7 +291,7 @@ export default function SettlePage() {
           <Zap className="h-8 w-8 text-indigo-400" />
         </div>
         <h2 className="text-2xl font-extrabold text-white">Settlement Optimizer</h2>
-        <p className="mt-1 text-slate-400 text-sm">Min-Cash-Flow algorithm · Payments saved to database</p>
+        <p className="mt-1 text-slate-400 text-sm">Min-Cash-Flow algorithm · Payments tracked automatically</p>
       </div>
 
       {feedback && (
@@ -390,7 +390,7 @@ export default function SettlePage() {
           {allSettled && transactions.length > 0 && (
             <div className="mb-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4 text-center">
               <div className="text-2xl mb-1">🎉</div>
-              <p className="font-bold text-emerald-400">All transactions settled! Saved to database.</p>
+              <p className="font-bold text-emerald-400">All transactions settled!</p>
             </div>
           )}
 
@@ -441,7 +441,7 @@ export default function SettlePage() {
                   <div className="mt-3 flex flex-col gap-3">
                     <p className="text-xs text-slate-400">
                       <span style={{ color: from?.color }}>{from?.name}</span> pays <span style={{ color: to?.color }}>{to?.name}</span> ₹{txn.amount.toFixed(2)}
-                      {isSettled && <span className="ml-2 text-emerald-400 font-semibold">· Saved to DB ✓</span>}
+                      {isSettled && <span className="ml-2 text-emerald-400 font-semibold">· Settled ✓</span>}
                     </p>
 
                     <div className="flex flex-wrap items-center gap-3 text-xs">

@@ -484,6 +484,14 @@ export default function GroupExpensesPage() {
                       <div className="text-right shrink-0">
                         <div className="text-base font-extrabold text-white">₹{expense.amount.toLocaleString('en-IN')}</div>
                         <div className="text-[10px] text-slate-600 mt-0.5">{CATEGORY_META[expense.category].emoji} {expense.category}</div>
+                        <button
+                          onClick={() => deleteExpense(expense.id)}
+                          className="mt-2 ml-auto flex h-7 w-7 items-center justify-center rounded-full text-slate-600 hover:bg-rose-500/20 hover:text-rose-400 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
+                          aria-label="Delete expense"
+                          title="Delete expense"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     </div>
                     {expense.splitType !== 'equal' && (
@@ -500,10 +508,6 @@ export default function GroupExpensesPage() {
                     )}
                   </div>
                 </div>
-                <button onClick={() => deleteExpense(expense.id)}
-                  className="absolute right-3 top-3 hidden group-hover:flex h-7 w-7 items-center justify-center rounded-full text-slate-600 hover:bg-rose-500/20 hover:text-rose-400 transition-colors">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
               </div>
             );
           })}

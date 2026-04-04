@@ -490,7 +490,7 @@ function GroupsTab({ onCreateGroup }: { onCreateGroup: () => void }) {
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-32">
       <Loader2 className="h-10 w-10 animate-spin text-indigo-500 mb-4" />
-      <p className="text-slate-400 text-sm">Loading your groups from database...</p>
+      <p className="text-slate-400 text-sm">Loading your groups...</p>
     </div>
   );
 
@@ -672,7 +672,7 @@ export default function DashboardPage() {
               {tab === 'friends' ? 'Friends' : 'My Groups'}
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              {tab === 'friends' ? 'Track individual balances & send invites via email' : 'Manage shared expenses — synced to MongoDB'}
+              {tab === 'friends' ? 'Track individual balances & send invites via email' : 'Manage shared expenses — always in sync'}
             </p>
           </div>
 
