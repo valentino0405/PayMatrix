@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { ArrowRight, Zap, Users, PieChart, GitMerge, CheckCircle, TrendingDown, Shield } from 'lucide-react';
+import { ArrowRight, Zap, Users, PieChart, GitMerge, CheckCircle, TrendingDown, Shield, ScanLine } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import Navbar from '@/components/HomeComponents/Navbar'; // ← from sou2
 
 const features = [
@@ -7,6 +8,7 @@ const features = [
   { icon: Users, label: 'Group Management', desc: 'Create groups for trips, roommates, or events. Invite members and track everything in one place.' },
   { icon: PieChart, label: 'Visual Debt Graph', desc: 'Interactive graph — nodes are people, edges show who owes whom and how much.' },
   { icon: GitMerge, label: 'Smart Splits', desc: 'Equal, unequal, or percentage splits — PayMatrix handles the math automatically.' },
+  { icon: ScanLine, label: 'Receipt Scanner', desc: 'Snap a photo of any receipt — OCR auto-fills the amount, date, and merchant.' },
 ];
 
 const steps = [
@@ -53,10 +55,11 @@ export default function LandingPage() {
             Get Started <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
-            href="/dashboard"
+            href="/scan"
             className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-8 py-3.5 text-base font-semibold text-white hover:bg-white/10 transition-all"
           >
-            View Demo
+            <ScanLine className="h-4 w-4" />
+            Scan a Receipt
           </Link>
         </div>
 
@@ -79,7 +82,7 @@ export default function LandingPage() {
       {/* FEATURES */}
       <section className="mx-auto w-full max-w-6xl px-5 pb-24 sm:px-8">
         <h2 className="mb-10 text-center text-3xl font-bold text-white">Everything you need</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:[&>*:last-child]:col-span-2 xl:[&>*:last-child]:col-span-1 xl:grid-cols-5">
           {features.map(f => (
             <div
               key={f.label}

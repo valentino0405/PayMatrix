@@ -5,6 +5,20 @@ export type GroupType = 'Trip' | 'Roommates' | 'Event' | 'Other';
 export type SplitType = 'equal' | 'unequal' | 'percentage';
 export type Category = 'Food'|'Travel'|'Accommodation'|'Entertainment'|'Shopping'|'Utilities'|'Health'|'Other';
 
+export interface Friend {
+  id: string;
+  name: string;
+  email: string;
+  color: string;
+  avatar?: string;
+  balance: number;   // positive = they owe you, negative = you owe them
+  note?: string;
+  settled: boolean;
+  settledAt?: string;
+  status: 'accepted' | 'pending';
+  createdAt: string;
+}
+
 export interface Member { id: string; name: string; color: string; email?: string; }
 export interface ExpenseSplit { memberId: string; amount: number; }
 export interface Expense {
@@ -51,7 +65,7 @@ const ne = (e: any): Expense => ({
 });
 
 interface StoreCtx {
-  groups: Group[]; expenses: Expense[]; loading: boolean;
+  groups: Group[]; expenses: Expense[]; friends: Friend[]; loading: boolean; friendsLoading: boolean;
   addGroup: (d: { name: string; type: GroupType; members: { name: string; email?: string }[] }) => Promise<Group>;
   updateGroupBudget: (groupId: string, budget: number | undefined) => Promise<void>;
   addMember: (groupId: string, name: string) => Promise<void>;
@@ -64,16 +78,25 @@ interface StoreCtx {
   getGroupPayments: (groupId: string) => PaymentTxn[];
   getNetBalances: (groupId: string, applySettlements?: boolean) => Record<string, number>;
   refreshGroups: () => Promise<void>;
+  refreshFriends: () => Promise<void>;
+  // Friend functions (all MongoDB-backed now)
+  addFriend: (name: string, balance: number) => void; // kept for backward compat
+  inviteFriend: (email: string, balance: number, note?: string) => Promise<{ success: boolean; inviteUrl?: string; message?: string; error?: string }>;
+  settleFriend: (id: string) => Promise<void>;
+  unsettleFriend: (id: string) => Promise<void>;
+  updateFriendBalance: (id: string, balance: number) => Promise<void>;
 }
 
 const Ctx = createContext<StoreCtx | null>(null);
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [groups, setGroups] = useState<Group[]>([]);
+  const [groups, setGroups]     = useState<Group[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [payments, setPayments] = useState<PaymentTxn[]>([]);
   const [loading, setLoading] = useState(true);
+  const [friends, setFriends]   = useState<Friend[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState(true);
 
   // ── Core fetch: load all groups + all their expenses ────────────────────────
   const refreshGroups = useCallback(async () => {
@@ -121,6 +144,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => { refreshGroups(); }, [refreshGroups]);
+
+  /* ── Friends (MongoDB) ────────────────────────────────────────────── */
+  const refreshFriends = useCallback(async () => {
+    try {
+      setFriendsLoading(true);
+      const res = await fetch('/api/friends');
+      if (!res.ok) { setFriends([]); return; }
+      const raw = await res.json();
+      setFriends(Array.isArray(raw) ? raw : []);
+    } catch (err) { console.error('refreshFriends:', err); }
+    finally { setFriendsLoading(false); }
+  }, []);
+
+  useEffect(() => { refreshFriends(); }, [refreshFriends]);
 
   // ── addGroup ─────────────────────────────────────────────────────────────────
   const addGroup = useCallback(async (d: { name: string; type: GroupType; members: { name: string; email?: string }[] }): Promise<Group> => {
@@ -245,12 +282,59 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return bal;
   }, [groups, expenses, settlements, payments]);
 
+  /* ── Friend mutations ─────────────────────────────────────────────── */
+  const inviteFriend = useCallback(async (email: string, balance: number, note?: string) => {
+    const res = await fetch('/api/friends/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ receiverEmail: email, balance, note }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      await refreshFriends();
+      return { success: true, inviteUrl: data.inviteUrl, message: data.message };
+    }
+    return { success: false, error: data.error };
+  }, [refreshFriends]);
+
+  // Stub kept for type compatibility (not used — use inviteFriend instead)
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  const addFriend = useCallback((_name: string, _balance: number) => {}, []);
+
+  const settleFriend = useCallback(async (id: string) => {
+    await fetch(`/api/friends/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settled: true }),
+    });
+    setFriends(p => p.map(f => f.id === id ? { ...f, settled: true, balance: 0, settledAt: new Date().toISOString() } : f));
+  }, []);
+
+  const unsettleFriend = useCallback(async (id: string) => {
+    await fetch(`/api/friends/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settled: false }),
+    });
+    setFriends(p => p.map(f => f.id === id ? { ...f, settled: false, settledAt: undefined } : f));
+  }, []);
+
+  const updateFriendBalance = useCallback(async (id: string, balance: number) => {
+    await fetch(`/api/friends/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ balance }),
+    });
+    setFriends(p => p.map(f => f.id === id ? { ...f, balance, settled: false } : f));
+  }, []);
+
   // RESOLVED CONFLICT: Cleanly exporting ALL combined functions
   return (
     <Ctx.Provider value={{
-      groups, expenses, loading,
+      groups, expenses, friends, loading, friendsLoading,
       addGroup, addMember, removeMember, updateGroupBudget, addExpense, deleteExpense,
-      getGroup, getGroupExpenses, getGroupSettlements, getGroupPayments, getNetBalances, refreshGroups,
+      getGroup, getGroupExpenses, getGroupSettlements, getGroupPayments, getNetBalances, refreshGroups, refreshFriends,
+      addFriend, inviteFriend, settleFriend, unsettleFriend, updateFriendBalance,
     }}>
       {children}
     </Ctx.Provider>
