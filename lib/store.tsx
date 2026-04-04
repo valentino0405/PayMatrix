@@ -5,12 +5,12 @@ export type GroupType = 'Trip' | 'Roommates' | 'Event' | 'Other';
 export type SplitType = 'equal' | 'unequal' | 'percentage';
 export type Category = 'Food'|'Travel'|'Accommodation'|'Entertainment'|'Shopping'|'Utilities'|'Health'|'Other';
 
-export interface Member { id: string; name: string; color: string; }
+export interface Member { id: string; name: string; color: string; email?: string; }
 export interface ExpenseSplit { memberId: string; amount: number; }
 export interface Expense {
   id: string; groupId: string; description: string; amount: number;
   paidBy: string; splitType: SplitType; splits: ExpenseSplit[];
-  category: Category; createdAt: string;
+  category: Category; isSuspicious?: boolean; createdAt: string;
 }
 export interface Group {
   id: string; name: string; type: GroupType;
@@ -39,12 +39,13 @@ const ne = (e: any): Expense => ({
   splitType: e.splitType,
   splits: (e.splits ?? []).map((s: ExpenseSplit) => ({ memberId: String(s.memberId), amount: Number(s.amount) })),
   category: e.category ?? 'Other',
+  isSuspicious: e.isSuspicious ?? false,
   createdAt: e.createdAt,
 });
 
 interface StoreCtx {
   groups: Group[]; expenses: Expense[]; loading: boolean;
-  addGroup: (d: { name: string; type: GroupType; memberNames: string[] }) => Promise<Group>;
+  addGroup: (d: { name: string; type: GroupType; members: { name: string; email?: string }[] }) => Promise<Group>;
   addMember: (groupId: string, name: string) => Promise<void>;
   removeMember: (groupId: string, memberId: string) => Promise<void>;
   addExpense: (e: Omit<Expense, 'id' | 'createdAt'>) => Promise<void>;
@@ -97,7 +98,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { refreshGroups(); }, [refreshGroups]);
 
   // ── addGroup ─────────────────────────────────────────────────────────────────
-  const addGroup = useCallback(async (d: { name: string; type: GroupType; memberNames: string[] }): Promise<Group> => {
+  const addGroup = useCallback(async (d: { name: string; type: GroupType; members: { name: string; email?: string }[] }): Promise<Group> => {
     const res = await fetch('/api/groups', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d),
     });

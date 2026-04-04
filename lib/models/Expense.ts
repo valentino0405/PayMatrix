@@ -8,6 +8,7 @@ export interface IExpenseSplit { memberId: string; amount: number; }
 export interface IExpense extends Document {
   groupId: string; description: string; amount: number; paidBy: string;
   splitType: SplitType; splits: IExpenseSplit[]; category: Category;
+  isSuspicious?: boolean;
   createdAt: Date; updatedAt: Date;
 }
 
@@ -24,6 +25,7 @@ const ExpenseSchema = new Schema<IExpense>({
   splitType:   { type: String, enum: ['equal','unequal','percentage'], required: true },
   splits:      { type: [SplitSchema], default: [] },
   category:    { type: String, enum: ['Food','Travel','Accommodation','Entertainment','Shopping','Utilities','Health','Other'], default: 'Other' },
+  isSuspicious:{ type: Boolean, default: false },
 }, { timestamps: true });
 
 const Expense: Model<IExpense> = mongoose.models.Expense ?? mongoose.model<IExpense>('Expense', ExpenseSchema);

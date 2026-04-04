@@ -2,7 +2,7 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export type GroupType = 'Trip' | 'Roommates' | 'Event' | 'Other';
 
-export interface IMember { id: string; name: string; color: string; }
+export interface IMember { id: string; name: string; color: string; email?: string; }
 
 export interface IGroup extends Document {
   name: string; type: GroupType;
@@ -11,7 +11,7 @@ export interface IGroup extends Document {
 }
 
 const MemberSchema = new Schema<IMember>(
-  { id: { type: String, required: true }, name: { type: String, required: true }, color: { type: String, required: true } },
+  { id: { type: String, required: true }, name: { type: String, required: true }, color: { type: String, required: true }, email: { type: String, required: false } },
   { _id: false }
 );
 

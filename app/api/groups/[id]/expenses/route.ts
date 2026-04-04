@@ -37,6 +37,29 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
     await connectDB();
 
+    let isSuspicious = false;
+    
+    // Fraud Detection 1: Duplicates (same amount + description within last 24h)
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const duplicate = await Expense.findOne({
+      groupId: id,
+      amount: Number(body.amount),
+      description: body.description.trim(),
+      createdAt: { $gte: oneDayAgo }
+    });
+    if (duplicate) isSuspicious = true;
+
+    // Fraud Detection 2: Anomaly (amount > 10x average group expense)
+    if (!isSuspicious) {
+      const groupExpenses = await Expense.find({ groupId: id }).select('amount').lean();
+      if (groupExpenses.length > 2) {
+        const avg = groupExpenses.reduce((s, e) => s + e.amount, 0) / groupExpenses.length;
+        if (Number(body.amount) > avg * 10) {
+          isSuspicious = true;
+        }
+      }
+    }
+
     const expense = await Expense.create({
       groupId:     id,             // always use the URL param, not request body
       description: body.description.trim(),
@@ -45,6 +68,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       splitType:   body.splitType,
       splits:      Array.isArray(body.splits) ? body.splits : [],
       category:    body.category ?? 'Other',
+      isSuspicious: isSuspicious,
     });
 
     return NextResponse.json(expense, { status: 201 });

@@ -1,8 +1,8 @@
 'use client';
 import { useState, useMemo, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { Plus, X, Trash2, UtensilsCrossed, Plane, Home, PartyPopper, ShoppingBag, Zap, Heart, MoreHorizontal, Search, Filter } from 'lucide-react';
-import { useStore, Category, SplitType } from '@/lib/store';
+import { Plus, X, Trash2, UtensilsCrossed, Plane, Home, PartyPopper, ShoppingBag, Zap, Heart, MoreHorizontal, Search, Filter, Sparkles, AlertTriangle } from 'lucide-react';
+import { useStore, Category, SplitType, Member } from '@/lib/store';
 
 const CATEGORY_META: Record<Category, { icon: React.ElementType; emoji: string; color: string }> = {
   Food:          { icon: UtensilsCrossed, emoji: '🍕', color: '#f59e0b' },
@@ -32,12 +32,14 @@ function timeAgo(iso: string) {
   return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
-function parseNLP(text: string): { amount?: number; category?: Category } {
+function parseNLP(text: string, members: Member[]): { amount?: number; category?: Category; paidById?: string; paidByName?: string } {
   const amountMatch = text.match(/₹?\s*(\d+(?:\.\d+)?)/);
   const amount = amountMatch ? parseFloat(amountMatch[1]) : undefined;
+  
   const lower = text.toLowerCase();
+  
   const cat: Category | undefined =
-    lower.match(/food|lunch|dinner|breakfast|eat|meal|snack|coffee|chai/) ? 'Food' :
+    lower.match(/food|lunch|dinner|breakfast|eat|meal|snack|coffee|chai|pizza/) ? 'Food' :
     lower.match(/flight|train|cab|taxi|bus|uber|ola|petrol|fuel|travel/) ? 'Travel' :
     lower.match(/hotel|stay|hostel|airbnb|room|rent|house/) ? 'Accommodation' :
     lower.match(/movie|theater|club|party|event|game|sport|concert/) ? 'Entertainment' :
@@ -45,7 +47,19 @@ function parseNLP(text: string): { amount?: number; category?: Category } {
     lower.match(/electric|water|wifi|internet|bill|utility/) ? 'Utilities' :
     lower.match(/doctor|medical|pharma|medicine|health|gym/) ? 'Health' :
     undefined;
-  return { amount, category: cat };
+
+  // Try to extract the payer (e.g. "by Alex", "Alex paid")
+  let paidById: string | undefined;
+  let paidByName: string | undefined;
+  for (const m of members) {
+    if (lower.includes(m.name.toLowerCase())) {
+      paidById = m.id;
+      paidByName = m.name;
+      break;
+    }
+  }
+
+  return { amount, category: cat, paidById, paidByName };
 }
 
 function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () => void }) {
@@ -59,6 +73,7 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
   const [splits, setSplits] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [nlpMatch, setNlpMatch] = useState<{ amt?: number; cat?: Category; payer?: string }>({});
 
   useEffect(() => {
     if (splitType === 'equal') {
@@ -82,9 +97,15 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
 
   const handleDescChange = (val: string) => {
     setDesc(val);
-    const parsed = parseNLP(val);
+    const parsed = parseNLP(val, group.members);
+    
+    // Auto-fill states if confident
     if (parsed.amount && !amount) setAmount(parsed.amount.toString());
     if (parsed.category) setCategory(parsed.category);
+    if (parsed.paidById) setPaidBy(parsed.paidById);
+    
+    // Store match separately for UI highlight
+    setNlpMatch({ amt: parsed.amount, cat: parsed.category, payer: parsed.paidByName });
   };
 
   const validate = (): boolean => {
@@ -126,6 +147,8 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
   const getPctSum = () => Object.values(splits).reduce((a, v) => a + parseFloat(v || '0'), 0);
   const getUnequalSum = () => Object.values(splits).reduce((a, v) => a + parseFloat(v || '0'), 0);
 
+  const isComplexSplit = splitType === 'unequal' && group.members.length > 2 && Object.values(splits).filter(v => parseFloat(v||'0') > 0).length > 2;
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#111118] shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -135,11 +158,25 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Description</label>
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Description & Smart Input</label>
             <input autoFocus value={desc} onChange={e => handleDescChange(e.target.value)}
-              placeholder='e.g. "Lunch at Taj" or "paid 500 food"'
+              placeholder='e.g. "Lunch at Taj by Alex for 500"'
               className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 transition-all text-sm" />
-            <p className="mt-1 text-xs text-slate-600">💡 Try "paid 500 for food" — AI auto-fills details</p>
+            
+            {/* NLP Smart Extraction UI */}
+            {desc.trim() && (nlpMatch.amt || nlpMatch.cat || nlpMatch.payer) ? (
+              <div className="mt-2 flex items-center gap-2 flex-wrap animate-in fade-in slide-in-from-top-1 duration-300">
+                <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mr-1">Auto-detected:</span>
+                {nlpMatch.amt && <span className="rounded bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 px-1.5 py-0.5 text-xs font-bold">₹{nlpMatch.amt}</span>}
+                {nlpMatch.payer && <span className="rounded bg-violet-500/20 border border-violet-500/30 text-violet-300 px-1.5 py-0.5 text-xs font-semibold">By {nlpMatch.payer}</span>}
+                {nlpMatch.cat && <span className="rounded bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 px-1.5 py-0.5 text-xs font-semibold flex items-center gap-1">{CATEGORY_META[nlpMatch.cat].emoji} {nlpMatch.cat}</span>}
+              </div>
+            ) : (
+              <div className="mt-2 text-xs text-slate-500 flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5" /> Type naturally to auto-fill details!
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Amount (₹)</label>
@@ -181,6 +218,17 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
               ))}
             </div>
           </div>
+          
+          {/* Smart suggestion for splitting */}
+          {isComplexSplit && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-400" />
+              <div>
+                <strong>Smart Suggestion:</strong> You're doing a complex split across {group.members.length} people. Using the <strong>"Equal"</strong> split might reduce calculation errors and completely settle debts faster in our optimizer!
+              </div>
+            </div>
+          )}
+
           {splitType !== 'equal' && (
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -344,13 +392,20 @@ export default function GroupExpensesPage() {
             const payer = getMember(expense.paidBy);
             const cat = CATEGORY_META[expense.category];
             return (
-              <div key={expense.id} className="group relative rounded-2xl border border-white/[0.07] bg-white/[0.035] p-4 transition-all hover:border-white/15 hover:bg-white/[0.05]">
+              <div key={expense.id} className={`group relative rounded-2xl border p-4 transition-all hover:bg-white/[0.05] ${expense.isSuspicious ? 'border-rose-500/40 bg-rose-500/5 hover:border-rose-500/60' : 'border-white/[0.07] bg-white/[0.035] hover:border-white/15'}`}>
                 <div className="flex items-start gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl" style={{ backgroundColor: cat.color + '20' }}>{cat.emoji}</div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="font-semibold text-white">{expense.description}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-white">{expense.description}</p>
+                          {expense.isSuspicious && (
+                            <span className="flex items-center gap-1 rounded bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-bold text-rose-400 uppercase tracking-wider border border-rose-500/30">
+                              <AlertTriangle className="h-3 w-3" /> Fraud Risk
+                            </span>
+                          )}
+                        </div>
                         <p className="mt-0.5 text-xs text-slate-400">
                           Paid by <span className="font-semibold" style={{ color: payer?.color }}>{payer?.name ?? 'Unknown'}</span>
                           {' · '}

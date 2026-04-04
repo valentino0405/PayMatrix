@@ -13,17 +13,17 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const [name, setName] = useState('');
   const [type, setType] = useState<GroupType>('Trip');
-  const [members, setMembers] = useState(['', '']);
+  const [members, setMembers] = useState([{ name: '', email: '' }, { name: '', email: '' }]);
   const [busy, setBusy] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    const valid = members.filter(m => m.trim());
+    const valid = members.filter(m => m.name.trim());
     if (valid.length < 2) return alert('Add at least 2 members');
     setBusy(true);
     try {
-      const group = await addGroup({ name: name.trim(), type, memberNames: valid });
+      const group = await addGroup({ name: name.trim(), type, members: valid });
       onClose();
       router.push(`/groups/${group.id}`);
     } finally { setBusy(false); }
@@ -55,24 +55,28 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Members</label>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {members.map((m, i) => (
                 <div key={i} className="flex gap-2">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white text-xs font-bold" style={{ backgroundColor: MEMBER_COLORS[i % MEMBER_COLORS.length] }}>
-                    {m ? m[0].toUpperCase() : '?'}
+                  <div className="flex h-10 w-10 shrink-0 mt-1 items-center justify-center rounded-full text-white text-xs font-bold" style={{ backgroundColor: MEMBER_COLORS[i % MEMBER_COLORS.length] }}>
+                    {m.name ? m.name[0].toUpperCase() : '?'}
                   </div>
-                  <input value={m} onChange={e => setMembers(p => p.map((x, j) => j === i ? e.target.value : x))} placeholder={`Member ${i + 1}`}
-                    className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 transition-all" />
+                  <div className="flex-1 space-y-1.5">
+                    <input value={m.name} onChange={e => setMembers(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder={`Member ${i + 1} Name`}
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 transition-all" />
+                    <input value={m.email} onChange={e => setMembers(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder={`Email (for global identity)`} type="email"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 transition-all" />
+                  </div>
                   {members.length > 2 && (
                     <button type="button" onClick={() => setMembers(p => p.filter((_, j) => j !== i))}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-rose-500/20 hover:text-rose-400 transition-colors">
+                      className="flex h-10 w-10 shrink-0 mt-1 items-center justify-center rounded-full text-slate-500 hover:bg-rose-500/20 hover:text-rose-400 transition-colors">
                       <X className="h-4 w-4" />
                     </button>
                   )}
                 </div>
               ))}
             </div>
-            <button type="button" onClick={() => setMembers(p => [...p, ''])} className="mt-2 flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+            <button type="button" onClick={() => setMembers(p => [...p, { name: '', email: '' }])} className="mt-4 flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
               <Plus className="h-3.5 w-3.5" /> Add member
             </button>
           </div>
@@ -107,10 +111,15 @@ export default function DashboardPage() {
       <nav className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#07070f]/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-5 sm:px-8">
           <Link href="/" className="text-lg font-bold"><span className="text-indigo-400">Pay</span><span className="text-emerald-400">Matrix</span></Link>
-          <button onClick={() => setShowCreate(true)}
-            className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)]">
-            <Plus className="h-4 w-4" /> New Group
-          </button>
+          <div className="flex items-center gap-3">
+            <Link href="/global-settle" className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all">
+              🌍 Global Optimization
+            </Link>
+            <button onClick={() => setShowCreate(true)}
+              className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)]">
+              <Plus className="h-4 w-4" /> New Group
+            </button>
+          </div>
         </div>
       </nav>
 

@@ -27,15 +27,20 @@ export async function POST(req: NextRequest) {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { name, type, memberNames } = await req.json();
+    const { name, type, members } = await req.json();
     if (!name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 });
-    const valid = (memberNames ?? []).filter((m: string) => m.trim());
+    const valid = (members ?? []).filter((m: any) => m.name.trim());
     if (valid.length < 2) return NextResponse.json({ error: 'Need at least 2 members' }, { status: 400 });
 
     await connectDB();
     const group = await Group.create({
       name: name.trim(), type: type ?? 'Other',
-      members: valid.map((n: string, i: number) => ({ id: uid(), name: n, color: MEMBER_COLORS[i % MEMBER_COLORS.length] })),
+      members: valid.map((m: any, i: number) => ({ 
+        id: uid(), 
+        name: m.name.trim(), 
+        email: m.email?.trim() || undefined,
+        color: MEMBER_COLORS[i % MEMBER_COLORS.length] 
+      })),
       inviteCode: icode(),
       ownerClerkId: userId,
     });

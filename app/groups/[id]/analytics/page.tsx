@@ -2,6 +2,7 @@
 import { useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { useStore } from '@/lib/store';
+import { Sparkles, AlertTriangle, TrendingUp, CalendarDays } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
@@ -83,16 +84,101 @@ export default function AnalyticsPage() {
       .slice(-6); // last 6 months
   }, [expenses]);
 
+  // ── Smart Predictions ──────────────────────────────────────────────────────
+  const prediction = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const daysElapsed = now.getDate() || 1; // avoid /0 just in case
+
+    let thisMonthTotal = 0;
+    let lastMonthTotal = 0;
+
+    expenses.forEach(e => {
+      const d = new Date(e.createdAt);
+      if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
+        thisMonthTotal += e.amount;
+      } else if (d.getFullYear() === (currentMonth === 0 ? currentYear - 1 : currentYear) &&
+                 d.getMonth() === (currentMonth === 0 ? 11 : currentMonth - 1)) {
+        lastMonthTotal += e.amount;
+      }
+    });
+
+    const projected = Math.round((thisMonthTotal / daysElapsed) * daysInMonth);
+    const differenceLastMonth = lastMonthTotal > 0 ? ((projected - lastMonthTotal) / lastMonthTotal) * 100 : 0;
+    
+    return {
+      thisMonthTotal,
+      projected,
+      lastMonthTotal,
+      differenceLastMonth: Math.round(differenceLastMonth),
+      isOverspending: differenceLastMonth > 10, // 10% over last month
+    };
+  }, [expenses]);
+
   // ── Stats ──────────────────────────────────────────────────────────────────
   const totalSpend = expenses.reduce((s, e) => s + e.amount, 0);
   const avgPerExpense = expenses.length > 0 ? totalSpend / expenses.length : 0;
   const topCategory = categoryData[0];
   const biggestExpense = expenses.reduce((max, e) => e.amount > (max?.amount ?? 0) ? e : max, expenses[0]);
+  const isTopCategoryWarning = topCategory && totalSpend > 0 && (topCategory.value / totalSpend) > 0.45;
 
   if (!group) return null;
 
   return (
     <div className="space-y-6">
+      
+      {/* ── Smart Insights Banner ────────────────────────────────────────── */}
+      {(expenses.length > 0) && (
+        <div className="rounded-2xl border border-indigo-500/20 bg-gradient-to-r from-indigo-500/[0.08] to-violet-500/[0.04] p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="h-5 w-5 text-indigo-400" />
+            <h3 className="text-base font-extrabold text-white tracking-wide">Smart Insights</h3>
+          </div>
+          
+          <div className="grid gap-3 sm:grid-cols-2">
+            {/* Run Rate Predictor */}
+            <div className="flex items-start gap-3 rounded-xl border border-white/[0.05] bg-black/20 p-4">
+              <div className={`p-2 rounded-lg ${prediction.isOverspending ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                {prediction.isOverspending ? <TrendingUp className="h-4 w-4" /> : <CalendarDays className="h-4 w-4" />}
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase mb-1">Monthly Prediction</p>
+                <div className="text-sm text-slate-200">
+                  You are projected to spend <strong className="text-white">₹{prediction.projected.toLocaleString('en-IN')}</strong> this month.
+                </div>
+                {prediction.lastMonthTotal > 0 && (
+                  <p className={`text-xs mt-1.5 font-semibold ${prediction.isOverspending ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    {prediction.isOverspending ? `▲ ${prediction.differenceLastMonth}% higher` : `▼ ${Math.abs(prediction.differenceLastMonth)}% lower`} than last month's ₹{prediction.lastMonthTotal.toLocaleString('en-IN')}.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Category Suggestion */}
+            {topCategory && (
+              <div className="flex items-start gap-3 rounded-xl border border-white/[0.05] bg-black/20 p-4">
+                <div className={`p-2 rounded-lg ${isTopCategoryWarning ? 'bg-amber-500/20 text-amber-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                  {isTopCategoryWarning ? <AlertTriangle className="h-4 w-4" /> : <PieChart className="h-4 w-4" />}
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase mb-1">Spending Habits</p>
+                  <p className="text-sm text-slate-200">
+                    Your highest spending is on <strong className="text-white">{CATEGORY_EMOJI[topCategory.name]} {topCategory.name}</strong> at ₹{topCategory.value.toLocaleString('en-IN')}.
+                  </p>
+                  {isTopCategoryWarning && (
+                    <p className="text-xs mt-1.5 font-semibold text-amber-400">
+                      💡 Insight: This consumes over {Math.round((topCategory.value / totalSpend) * 100)}% of your group's budget. You spend too much here!
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Summary stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
