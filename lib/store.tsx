@@ -12,6 +12,12 @@ export interface Expense {
   paidBy: string; splitType: SplitType; splits: ExpenseSplit[];
   category: Category; createdAt: string;
 }
+export interface Settlement {
+  from: string; to: string; amount: number; groupId: string; paymentTransactionId?: string;
+}
+export interface PaymentTxn {
+  from: string; to: string; amount: number; groupId: string; status: string;
+}
 export interface Group {
   id: string; name: string; type: GroupType;
   members: Member[]; inviteCode: string; createdAt: string;
@@ -34,7 +40,9 @@ interface StoreCtx {
   deleteExpense: (id: string) => Promise<void>;
   getGroup: (id: string) => Group | undefined;
   getGroupExpenses: (groupId: string) => Expense[];
-  getNetBalances: (groupId: string) => Record<string, number>;
+  getGroupSettlements: (groupId: string) => Settlement[];
+  getGroupPayments: (groupId: string) => PaymentTxn[];
+  getNetBalances: (groupId: string, applySettlements?: boolean) => Record<string, number>;
   refreshGroups: () => Promise<void>;
 }
 
@@ -43,6 +51,8 @@ const Ctx = createContext<StoreCtx | null>(null);
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [payments, setPayments] = useState<PaymentTxn[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refreshGroups = useCallback(async () => {
@@ -58,6 +68,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         gs.map(g => fetch(`/api/groups/${g.id}/expenses`).then(r => r.ok ? r.json() : []).then((a: unknown[]) => a.map(ne)))
       );
       setExpenses(all.flat());
+
+      // Load settlements for all groups in parallel
+      const allSettlements = await Promise.all(
+        gs.map(g => fetch(`/api/groups/${g.id}/settlements`).then(r => r.ok ? r.json() : []).then(arr => arr.map((s: any) => ({ ...s, groupId: g.id }))))
+      );
+      setSettlements(allSettlements.flat());
+
+      // Load successful payments for all groups
+      const allPayments = await Promise.all(
+        gs.map(g => fetch(`/api/groups/${g.id}/payments?status=success`).then(r => r.ok ? r.json() : []).then(arr => arr.map((p: any) => ({ ...p, groupId: g.id }))))
+      );
+      setPayments(allPayments.flat());
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, []);
@@ -98,19 +120,45 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const getGroup = useCallback((id: string) => groups.find(g => g.id === id), [groups]);
   const getGroupExpenses = useCallback((gid: string) => expenses.filter(e => e.groupId === gid), [expenses]);
-  const getNetBalances = useCallback((groupId: string): Record<string, number> => {
+  const getGroupSettlements = useCallback((gid: string) => settlements.filter(s => s.groupId === gid), [settlements]);
+  const getGroupPayments = useCallback((gid: string) => payments.filter(p => p.groupId === gid), [payments]);
+  
+  const getNetBalances = useCallback((groupId: string, applySettlements: boolean = false): Record<string, number> => {
     const group = groups.find(g => g.id === groupId); if (!group) return {};
     const bal: Record<string, number> = {};
     group.members.forEach(m => (bal[m.id] = 0));
+    
+    // 1. Calculate debt based purely on expenses
     expenses.filter(e => e.groupId === groupId).forEach(exp => {
       bal[exp.paidBy] = (bal[exp.paidBy] || 0) + exp.amount;
       exp.splits.forEach(s => { bal[s.memberId] = (bal[s.memberId] || 0) - s.amount; });
     });
+    
+    // 2. Adjust debt using completed actual payments + manual settlements
+    if (applySettlements) {
+      // 2a. Real payments (Razorpay/UPI) that succeeded
+      payments.filter(p => p.groupId === groupId && p.status === 'success').forEach(txn => {
+        bal[txn.from] = (bal[txn.from] || 0) + txn.amount;
+        bal[txn.to] = (bal[txn.to] || 0) - txn.amount;
+      });
+
+      // 2b. Manual mark paid (Settlements with NO underlying payment transaction to avoid double counts)
+      settlements.filter(s => s.groupId === groupId && !s.paymentTransactionId).forEach(settlement => {
+        bal[settlement.from] = (bal[settlement.from] || 0) + settlement.amount;
+        bal[settlement.to] = (bal[settlement.to] || 0) - settlement.amount;
+      });
+    }
+
+    // Fix floating point math rounding errors
+    for (const key of Object.keys(bal)) {
+      bal[key] = Math.round(bal[key] * 100) / 100;
+    }
+
     return bal;
-  }, [groups, expenses]);
+  }, [groups, expenses, settlements, payments]);
 
   return (
-    <Ctx.Provider value={{ groups, expenses, loading, addGroup, addMember, removeMember, addExpense, deleteExpense, getGroup, getGroupExpenses, getNetBalances, refreshGroups }}>
+    <Ctx.Provider value={{ groups, expenses, loading, addGroup, addMember, removeMember, addExpense, deleteExpense, getGroup, getGroupExpenses, getGroupSettlements, getGroupPayments, getNetBalances, refreshGroups }}>
       {children}
     </Ctx.Provider>
   );

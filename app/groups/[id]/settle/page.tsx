@@ -1,9 +1,16 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import Script from 'next/script';
 import { Zap, ArrowRight, Check, TrendingDown, Users, Receipt, DollarSign, Loader2, CreditCard, MapPin, CalendarDays } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { calculateSettlements, naiveTransactionCount, Transaction } from '@/lib/settlement';
+
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 interface PaidRecord { from: string; to: string; amount: number; }
 interface PaymentRecord {
@@ -125,7 +132,7 @@ export default function SettlePage() {
     finally { setSaving(null); }
   };
 
-  const handlePayNow = async (txn: Transaction) => {
+  const handlePayNow = async (txn: Transaction, isUpi: boolean = false) => {
     const key = txnKey(txn);
     const draft = getDraft(key);
     const remaining = getRemaining(txn);
@@ -154,7 +161,8 @@ export default function SettlePage() {
     setFeedback(null);
 
     try {
-      const res = await fetch(`/api/groups/${id}/payments`, {
+      // 1. Create Razorpay order via backend
+      const resOrder = await fetch(`/api/groups/${id}/payments/razorpay/order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -162,36 +170,104 @@ export default function SettlePage() {
           to: txn.to,
           amount: payAmount,
           targetAmount: txn.amount,
-          locationLabel: draft.locationLabel.trim() || undefined,
-          city: draft.city.trim() || undefined,
-          reminderAt: draft.reminderAt || undefined,
           note: draft.note.trim() || undefined,
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Payment failed');
+      const orderData = await resOrder.json();
+      if (!resOrder.ok) throw new Error(orderData?.error || 'Failed to initialize payment');
 
-      if (data?.transaction) {
-        setPayments(prev => [data.transaction as PaymentRecord, ...prev]);
-      }
+      const { order, transactionId } = orderData;
 
-      if (data?.settlement || data?.alreadySettled || Number(data?.remaining ?? 0) <= 0) {
-        setPaidRecords(prev => {
-          const exists = prev.some(r => r.from === txn.from && r.to === txn.to && r.amount === txn.amount);
-          return exists ? prev : [...prev, { from: txn.from, to: txn.to, amount: txn.amount }];
-        });
-      }
+      // 2. Initialize Razorpay popup
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, // Enter the Key ID generated from the Dashboard
+        amount: order.amount,
+        currency: order.currency,
+        name: "PayMatrix Demo",
+        description: `Settlement payment`,
+        order_id: order.id,
+        handler: async function (response: any) {
+          try {
+            // 3. Verify Payment
+            const resVerify = await fetch(`/api/groups/${id}/payments/razorpay/verify`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                transactionId,
+                targetAmount: txn.amount,
+              }),
+            });
 
-      const remainingAfter = Number(data?.remaining ?? Math.max(0, remaining - payAmount));
-      if (remainingAfter <= 0) {
-        setFeedback({ type: 'success', text: 'Payment successful. Fully settled and saved to database.' });
-      } else {
-        setFeedback({ type: 'success', text: `Payment successful. ₹${remainingAfter.toFixed(2)} still remaining.` });
-      }
+            const verifyData = await resVerify.json();
+            if (!resVerify.ok) throw new Error(verifyData?.error || 'Payment verification failed');
+
+            // 4. Update UI state on successful verification
+            if (verifyData?.transaction) {
+              setPayments(prev => [verifyData.transaction as PaymentRecord, ...prev]);
+            }
+
+            if (verifyData?.settlement || verifyData?.alreadySettled || Number(verifyData?.remaining ?? 0) <= 0) {
+              setPaidRecords(prev => {
+                const exists = prev.some(r => r.from === txn.from && r.to === txn.to && r.amount === txn.amount);
+                return exists ? prev : [...prev, { from: txn.from, to: txn.to, amount: txn.amount }];
+              });
+            }
+
+            const remainingAfter = Number(verifyData?.remaining ?? Math.max(0, remaining - payAmount));
+            if (remainingAfter <= 0) {
+              setFeedback({ type: 'success', text: 'Payment successful. Fully settled and saved to database.' });
+            } else {
+              setFeedback({ type: 'success', text: `Payment successful. ₹${remainingAfter.toFixed(2)} still remaining.` });
+            }
+          } catch (err) {
+            setFeedback({ type: 'error', text: err instanceof Error ? err.message : 'Verification failed' });
+          } finally {
+            setSaving(null);
+          }
+        },
+        prefill: {
+          name: group.members.find((m) => m.id === txn.from)?.name || "User",
+        },
+        theme: {
+          color: "#6366f1",
+        },
+        modal: {
+          ondismiss: function () {
+            setSaving(null);
+            setFeedback({ type: 'error', text: 'Payment cancelled by user.' });
+          }
+        },
+        ...(isUpi ? {
+          config: {
+            display: {
+              blocks: {
+                upi: {
+                  name: "Pay via UPI",
+                  instruments: [
+                    { method: "upi" }
+                  ]
+                }
+              },
+              sequence: ["block.upi"],
+              preferences: { show_default_blocks: true }
+            }
+          }
+        } : {})
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response: any) {
+        setSaving(null);
+        setFeedback({ type: 'error', text: `Payment Failed: ${response.error.description}` });
+      });
+      rzp.open();
+
     } catch (err) {
-      setFeedback({ type: 'error', text: err instanceof Error ? err.message : 'Payment failed' });
-    } finally {
+      setFeedback({ type: 'error', text: err instanceof Error ? err.message : 'Failed to initialize Razorpay checkout' });
       setSaving(null);
     }
   };
@@ -208,6 +284,7 @@ export default function SettlePage() {
 
   return (
     <div className="max-w-2xl mx-auto">
+      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
       {/* Hero */}
       <div className="mb-8 text-center">
         <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500/30 to-violet-500/20 border border-indigo-500/30 mb-4">
@@ -462,14 +539,24 @@ export default function SettlePage() {
 
                     <div className="flex items-center justify-end gap-2">
                       {!isSettled && (
-                        <button
-                          onClick={() => handlePayNow(txn)}
-                          disabled={isSaving}
-                          className="flex items-center gap-1.5 rounded-lg bg-linear-to-r from-indigo-600 to-violet-600 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50"
-                        >
-                          {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <CreditCard className="h-3 w-3" />}
-                          Pay Now (Demo)
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handlePayNow(txn, true)}
+                            disabled={isSaving}
+                            className="flex items-center gap-1.5 rounded-lg bg-linear-to-r from-emerald-500 to-teal-500 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50"
+                          >
+                            {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                            UPI
+                          </button>
+                          <button
+                            onClick={() => handlePayNow(txn)}
+                            disabled={isSaving}
+                            className="flex items-center gap-1.5 rounded-lg bg-linear-to-r from-indigo-600 to-violet-600 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50"
+                          >
+                            {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <CreditCard className="h-3 w-3" />}
+                            Cards / NetBanking
+                          </button>
+                        </div>
                       )}
                       <button onClick={() => togglePaid(txn)} disabled={isSaving}
                         className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all disabled:opacity-50 ${isSettled ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white border border-white/10'}`}>

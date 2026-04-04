@@ -23,7 +23,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
   const body = await req.json();
   await connectDB();
-  const group = await Group.findByIdAndUpdate(id, body, { new: true });
+  const group = await Group.findByIdAndUpdate(id, body, { returnDocument: 'after' });
   if (!group) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json(group);
 }

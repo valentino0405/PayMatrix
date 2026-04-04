@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
-export type PaymentMethod = 'UPI_DEMO';
+export type PaymentMethod = 'UPI_DEMO' | 'RAZORPAY';
 export type PaymentStatus = 'initiated' | 'processing' | 'success' | 'failed';
 export type ReminderStatus = 'none' | 'scheduled' | 'sent';
 
@@ -19,9 +19,15 @@ export interface IPaymentTransaction extends Document {
   currency: 'INR';
   method: PaymentMethod;
   status: PaymentStatus;
-  provider: 'SIMULATED_UPI';
+  provider: 'SIMULATED_UPI' | 'RAZORPAY';
   providerOrderId: string;
   providerTxnId?: string;
+  
+  // Razorpay Specific Fields
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  razorpaySignature?: string;
+  
   note?: string;
   locationTag?: ILocationTag;
   reminderAt?: Date;
@@ -50,11 +56,14 @@ const PaymentTransactionSchema = new Schema<IPaymentTransaction>(
     to: { type: String, required: true },
     amount: { type: Number, required: true },
     currency: { type: String, default: 'INR' },
-    method: { type: String, enum: ['UPI_DEMO'], default: 'UPI_DEMO' },
+    method: { type: String, enum: ['UPI_DEMO', 'RAZORPAY'], default: 'UPI_DEMO' },
     status: { type: String, enum: ['initiated', 'processing', 'success', 'failed'], default: 'initiated', index: true },
-    provider: { type: String, default: 'SIMULATED_UPI' },
+    provider: { type: String, enum: ['SIMULATED_UPI', 'RAZORPAY'], default: 'SIMULATED_UPI' },
     providerOrderId: { type: String, required: true, unique: true },
     providerTxnId: { type: String },
+    razorpayOrderId: { type: String, index: true },
+    razorpayPaymentId: { type: String },
+    razorpaySignature: { type: String },
     note: { type: String },
     locationTag: { type: LocationTagSchema },
     reminderAt: { type: Date },

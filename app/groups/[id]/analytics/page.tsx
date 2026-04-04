@@ -1,5 +1,5 @@
 'use client';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import {
@@ -45,9 +45,12 @@ const BarTooltip = ({ active, payload, label }: any) => {
 
 export default function AnalyticsPage() {
   const { id } = useParams<{ id: string }>();
-  const { getGroup, getGroupExpenses } = useStore();
+  const { getGroup, getGroupExpenses, getGroupSettlements, getGroupPayments } = useStore();
+  const [viewMode, setViewMode] = useState<'initial' | 'current'>('initial');
   const group = getGroup(id);
   const expenses = getGroupExpenses(id);
+  const settlements = getGroupSettlements(id);
+  const payments = getGroupPayments(id);
 
   // ── Category breakdown ─────────────────────────────────────────────────────
   const categoryData = useMemo(() => {
@@ -62,14 +65,25 @@ export default function AnalyticsPage() {
   const memberData = useMemo(() => {
     if (!group) return [];
     return group.members.map(m => {
-      const paid = expenses.filter(e => e.paidBy === m.id).reduce((s, e) => s + e.amount, 0);
-      const owed = expenses.reduce((s, e) => {
+      let paid = expenses.filter(e => e.paidBy === m.id).reduce((s, e) => s + e.amount, 0);
+      let owed = expenses.reduce((s, e) => {
         const split = e.splits.find(sp => sp.memberId === m.id);
         return s + (split?.amount || 0);
       }, 0);
-      return { name: m.name, Paid: Math.round(paid), Owed: Math.round(owed), color: m.color };
+
+      if (viewMode === 'current') {
+        const manualSettlementPaid = settlements.filter(s => s.from === m.id && !s.paymentTransactionId).reduce((s, e) => s + e.amount, 0);
+        const manualSettlementReceived = settlements.filter(s => s.to === m.id && !s.paymentTransactionId).reduce((s, e) => s + e.amount, 0);
+        const realPaymentPaid = payments.filter(p => p.from === m.id && p.status === 'success').reduce((s, e) => s + e.amount, 0);
+        const realPaymentReceived = payments.filter(p => p.to === m.id && p.status === 'success').reduce((s, e) => s + e.amount, 0);
+
+        owed -= (manualSettlementPaid + realPaymentPaid);
+        paid -= (manualSettlementReceived + realPaymentReceived);
+      }
+
+      return { name: m.name, Paid: Math.max(0, Math.round(paid)), Owed: Math.max(0, Math.round(owed)), color: m.color };
     });
-  }, [group, expenses]);
+  }, [group, expenses, settlements, payments, viewMode]);
 
   // ── Monthly trend ──────────────────────────────────────────────────────────
   const monthlyData = useMemo(() => {
@@ -93,6 +107,23 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-center mt-2 mb-2">
+        <div className="inline-flex rounded-xl bg-white/5 p-1 border border-white/10">
+          <button
+            onClick={() => setViewMode('initial')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${viewMode === 'initial' ? 'bg-indigo-500/20 text-indigo-300 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            Original Structure
+          </button>
+          <button
+            onClick={() => setViewMode('current')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${viewMode === 'current' ? 'bg-emerald-500/20 text-emerald-300 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            Current Scenario
+          </button>
+        </div>
+      </div>
+
       {/* Summary stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
