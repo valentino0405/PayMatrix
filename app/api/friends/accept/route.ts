@@ -66,6 +66,10 @@ export async function POST(req: NextRequest) {
       balance:      invite.balance,   // positive = B (receiver) owes A (sender)
       note:         invite.note,
       settled:      invite.balance === 0,
+      unreadByA:    true,
+      unreadByB:    false,
+      lastUpdateType: 'accepted',
+      lastUpdatedAt: new Date(),
     });
 
     // Mark invite as accepted

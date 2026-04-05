@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   Plus, Users, X, ArrowRight, Receipt, TrendingUp, Loader2,
   UserPlus, CheckCircle2, RotateCcw, UserCircle2, Mail, Clock, Copy, Check, Share2, Trash2,
+  CheckCheck,
 } from 'lucide-react';
 import { useStore, GroupType, MEMBER_COLORS, Friend } from '@/lib/store';
 import { syncUser } from '@/app/actions/userActions';
@@ -294,11 +295,13 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
 
 /* ─── Friend Card ──────────────────────────────── */
 function FriendCard({ friend }: { friend: Friend }) {
-  const { settleFriend, unsettleFriend, deleteFriend } = useStore();
+  const { settleFriend, unsettleFriend, markFriendRead, deleteFriend } = useStore();
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [markingRead, setMarkingRead] = useState(false);
   const isPending = friend.status === 'pending';
   const owes = friend.balance < 0;
+  const paymentStatus = friend.paymentStatus ?? (friend.settled ? 'done' : (Math.abs(friend.balance) > 0 ? 'pending' : 'none'));
 
   const handleSettle = async () => {
     setLoading(true);
@@ -321,6 +324,16 @@ function FriendCard({ friend }: { friend: Friend }) {
       alert('Could not remove this friend right now. Please try again.');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleMarkRead = async () => {
+    if (isPending || !friend.unread) return;
+    setMarkingRead(true);
+    try {
+      await markFriendRead(friend.id);
+    } finally {
+      setMarkingRead(false);
     }
   };
 
@@ -352,6 +365,25 @@ function FriendCard({ friend }: { friend: Friend }) {
             {friend.note && <span className="text-slate-600"> · {friend.note}</span>}
           </div>
         )}
+
+        {!isPending && (
+          <div className="mt-1.5 flex items-center gap-2">
+            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+              paymentStatus === 'done'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                : paymentStatus === 'pending'
+                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                  : 'border-white/10 bg-white/5 text-slate-400'
+            }`}>
+              {paymentStatus === 'done' ? 'Payment done' : paymentStatus === 'pending' ? 'Payment pending' : 'No payment due'}
+            </span>
+            {friend.unread && (
+              <span className="rounded-full border border-indigo-500/30 bg-indigo-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-300">
+                New update
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {!isPending && !friend.settled && friend.balance !== 0 && (
@@ -361,6 +393,17 @@ function FriendCard({ friend }: { friend: Friend }) {
       )}
 
       <div className="flex items-center gap-2">
+        {!isPending && friend.unread && (
+          <button
+            onClick={handleMarkRead}
+            disabled={markingRead || loading || deleting}
+            title="Mark update as read"
+            className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 transition-colors disabled:opacity-50"
+          >
+            {markingRead ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
+          </button>
+        )}
+
         {!isPending && (
           friend.settled ? (
             <button onClick={handleUnsettle} disabled={loading || deleting} title="Mark unsettled"
