@@ -3,10 +3,11 @@ import { useState, useEffect } from 'react';
 import { UserButton } from '@clerk/nextjs';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import Script from 'next/script';
 import {
   Plus, Users, X, ArrowRight, Receipt, TrendingUp, Loader2,
   UserPlus, CheckCircle2, RotateCcw, UserCircle2, Mail, Clock, Copy, Check, Share2, Trash2,
-  CheckCheck,
+  CheckCheck, RefreshCw, CreditCard, HandCoins,
 } from 'lucide-react';
 import { useStore, GroupType, MEMBER_COLORS, Friend } from '@/lib/store';
 import { syncUser } from '@/app/actions/userActions';
@@ -16,6 +17,12 @@ const GROUP_TYPES: GroupType[] = ['Trip', 'Roommates', 'Event', 'Other'];
 const TYPE_EMOJI: Record<GroupType, string> = { Trip: '✈️', Roommates: '🏠', Event: '🎉', Other: '💼' };
 
 type Tab = 'friends' | 'groups';
+
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 function Avatar({ name, color, size = 8, avatar }: { name?: string; color?: string; size?: number; avatar?: string }) {
   if (avatar) {
@@ -286,12 +293,22 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
 
 /* ─── Friend Card ──────────────────────────────── */
 function FriendCard({ friend }: { friend: Friend }) {
-  const { settleFriend, unsettleFriend, markFriendRead, deleteFriend } = useStore();
+  const { settleFriend, unsettleFriend, markFriendRead, deleteFriend, refreshFriends } = useStore();
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [markingRead, setMarkingRead] = useState(false);
+  const [payAmount, setPayAmount] = useState('');
+  const [payCity, setPayCity] = useState('');
+  const [payNote, setPayNote] = useState('');
+  const [paying, setPaying] = useState(false);
+  const [payMode, setPayMode] = useState<'razorpay' | 'cash' | null>(null);
+  const [payFeedback, setPayFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const isPending = friend.status === 'pending';
   const owes = friend.balance < 0;
+  const payableAmount = Math.abs(friend.balance);
+  const canPay = !isPending && !friend.settled && owes && payableAmount > 0;
+  const paidAmount = Math.max(0, Number(friend.paidAmount ?? 0));
+  const remainingAmount = Math.max(0, Number(friend.remainingAmount ?? payableAmount));
   const paymentStatus = friend.paymentStatus ?? (friend.settled ? 'done' : (Math.abs(friend.balance) > 0 ? 'pending' : 'none'));
 
   const handleSettle = async () => {
@@ -325,6 +342,187 @@ function FriendCard({ friend }: { friend: Friend }) {
       await markFriendRead(friend.id);
     } finally {
       setMarkingRead(false);
+    }
+  };
+
+  const validatePaymentInput = () => {
+    const amount = payAmount.trim() ? Number(payAmount) : payableAmount;
+    if (!(amount >= 1)) {
+      setPayFeedback({ type: 'error', text: 'Amount must be at least INR 1.' });
+      return null;
+    }
+    if (amount > payableAmount) {
+      setPayFeedback({ type: 'error', text: `Amount exceeds remaining INR ${payableAmount.toFixed(2)}.` });
+      return null;
+    }
+    if (!payCity.trim()) {
+      setPayFeedback({ type: 'error', text: 'City is required.' });
+      return null;
+    }
+    return amount;
+  };
+
+  const handlePayFriendNow = async () => {
+    if (!canPay) return;
+    if (!window.Razorpay) {
+      setPayFeedback({ type: 'error', text: 'Razorpay SDK is still loading. Please try again.' });
+      return;
+    }
+
+    const amount = validatePaymentInput();
+    if (amount == null) return;
+
+    setPaying(true);
+    setPayMode('razorpay');
+    setPayFeedback(null);
+
+    try {
+      const resOrder = await fetch(`/api/friends/${friend.id}/payments/razorpay/order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount,
+          targetAmount: payableAmount,
+          city: payCity.trim(),
+          note: payNote.trim() || undefined,
+          reminderAt: new Date().toISOString(),
+        }),
+      });
+
+      const orderData = await resOrder.json();
+      if (!resOrder.ok) {
+        throw new Error(orderData?.error || 'Failed to initialize payment');
+      }
+
+      const { order, transactionId } = orderData;
+
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'PayMatrix Demo',
+        description: `Friend payment to ${friend.name}`,
+        order_id: order.id,
+        handler: async function (response: any) {
+          try {
+            const resVerify = await fetch(`/api/friends/${friend.id}/payments/razorpay/verify`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                transactionId,
+              }),
+            });
+
+            const verifyData = await resVerify.json();
+            if (!resVerify.ok) {
+              throw new Error(verifyData?.error || 'Payment verification failed');
+            }
+
+            const remaining = Number(verifyData?.remaining ?? Math.max(0, payableAmount - amount));
+            const paid = Number(verifyData?.totalPaid ?? 0);
+            setPayFeedback({
+              type: 'success',
+              text: remaining <= 0
+                ? 'Payment successful. Fully settled.'
+                : `Payment successful. Paid INR ${paid.toFixed(2)} | Remaining INR ${remaining.toFixed(2)}.`,
+            });
+            setPayAmount('');
+            setPayNote('');
+            await refreshFriends();
+          } catch (err) {
+            setPayFeedback({
+              type: 'error',
+              text: err instanceof Error ? err.message : 'Verification failed',
+            });
+          } finally {
+            setPaying(false);
+            setPayMode(null);
+          }
+        },
+        prefill: {
+          name: friend.name,
+          email: friend.email,
+        },
+        theme: {
+          color: '#6366f1',
+        },
+        modal: {
+          ondismiss: function () {
+            setPaying(false);
+            setPayMode(null);
+            setPayFeedback({ type: 'error', text: 'Payment cancelled by user.' });
+          },
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response: any) {
+        setPaying(false);
+        setPayMode(null);
+        setPayFeedback({
+          type: 'error',
+          text: `Payment failed: ${response?.error?.description ?? 'Unknown error'}`,
+        });
+      });
+      rzp.open();
+    } catch (err) {
+      setPayFeedback({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to initialize Razorpay checkout',
+      });
+      setPaying(false);
+      setPayMode(null);
+    }
+  };
+
+  const handlePayByCash = async () => {
+    if (!canPay) return;
+    const amount = validatePaymentInput();
+    if (amount == null) return;
+
+    setPaying(true);
+    setPayMode('cash');
+    setPayFeedback(null);
+
+    try {
+      const res = await fetch(`/api/friends/${friend.id}/payments/cash`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount,
+          city: payCity.trim(),
+          note: payNote.trim() || undefined,
+          reminderAt: new Date().toISOString(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to save cash payment');
+      }
+
+      const remaining = Number(data?.remaining ?? Math.max(0, payableAmount - amount));
+      const paid = Number(data?.totalPaid ?? amount);
+      setPayFeedback({
+        type: 'success',
+        text: remaining <= 0
+          ? 'Cash payment saved. Fully settled.'
+          : `Cash payment saved. Paid INR ${paid.toFixed(2)} | Remaining INR ${remaining.toFixed(2)}.`,
+      });
+      setPayAmount('');
+      setPayNote('');
+      await refreshFriends();
+    } catch (err) {
+      setPayFeedback({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to save cash payment',
+      });
+    } finally {
+      setPaying(false);
+      setPayMode(null);
     }
   };
 
@@ -373,6 +571,74 @@ function FriendCard({ friend }: { friend: Friend }) {
                 New update
               </span>
             )}
+          </div>
+        )}
+
+        {canPay && paymentStatus === 'pending' && (
+          <div className="mt-1 text-[11px] text-slate-400">
+            {remainingAmount <= 0
+              ? 'Payment done'
+              : paidAmount > 0
+                ? `Paid: INR ${paidAmount.toFixed(2)} • Remaining: INR ${remainingAmount.toFixed(2)}`
+                : `Remaining: INR ${remainingAmount.toFixed(2)}`}
+          </div>
+        )}
+
+        {canPay && (
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <input
+              type="number"
+              min="1"
+              step="0.01"
+              max={payableAmount}
+              value={payAmount}
+              onChange={(e) => setPayAmount(e.target.value)}
+              placeholder={`Amount (max INR ${payableAmount.toFixed(2)})`}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500/60"
+              disabled={paying}
+            />
+            <input
+              type="text"
+              value={payCity}
+              onChange={(e) => setPayCity(e.target.value)}
+              placeholder="City (required)"
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500/60"
+              disabled={paying}
+            />
+            <input
+              type="text"
+              value={payNote}
+              onChange={(e) => setPayNote(e.target.value)}
+              placeholder="Note (optional)"
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500/60"
+              disabled={paying}
+            />
+            <div className="sm:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handlePayFriendNow}
+                disabled={paying || deleting || loading}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/15 px-3 py-2 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/25 transition-all disabled:opacity-60"
+              >
+                {paying && payMode === 'razorpay' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
+                {paying && payMode === 'razorpay' ? 'Opening payment...' : 'Pay with Razorpay'}
+              </button>
+              <button
+                type="button"
+                onClick={handlePayByCash}
+                disabled={paying || deleting || loading}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25 transition-all disabled:opacity-60"
+              >
+                {paying && payMode === 'cash' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <HandCoins className="h-3.5 w-3.5" />}
+                {paying && payMode === 'cash' ? 'Saving cash...' : 'Mark as Cash Paid'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {payFeedback && (
+          <div className={`mt-2 rounded-lg border px-3 py-2 text-xs ${payFeedback.type === 'success' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-rose-500/30 bg-rose-500/10 text-rose-300'}`}>
+            {payFeedback.text}
           </div>
         )}
       </div>
@@ -425,8 +691,9 @@ function FriendCard({ friend }: { friend: Friend }) {
 
 /* ─── Friends Tab ──────────────────────────────── */
 function FriendsTab({ onAddFriend }: { onAddFriend: () => void }) {
-  const { friends, friendsLoading, markFriendRead } = useStore();
+  const { friends, friendsLoading, markFriendRead, refreshFriends } = useStore();
   const [markingAcceptedId, setMarkingAcceptedId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const safeFriends = Array.isArray(friends) ? friends : [];
   const active  = safeFriends.filter(f => !f.settled && f.status === 'accepted');
   const pending = safeFriends.filter(f => f.status === 'pending');
@@ -444,6 +711,15 @@ function FriendsTab({ onAddFriend }: { onAddFriend: () => void }) {
       await markFriendRead(friendId);
     } finally {
       setMarkingAcceptedId(null);
+    }
+  };
+
+  const handleRefreshFriends = async () => {
+    setRefreshing(true);
+    try {
+      await refreshFriends();
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -476,6 +752,19 @@ function FriendsTab({ onAddFriend }: { onAddFriend: () => void }) {
 
   return (
     <div className="space-y-8">
+      <div className="flex items-center justify-end">
+        <button
+          type="button"
+          onClick={handleRefreshFriends}
+          disabled={refreshing || friendsLoading}
+          className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20 transition-all disabled:opacity-60"
+          title="Refresh friends status"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${(refreshing || friendsLoading) ? 'animate-spin' : ''}`} />
+          {refreshing || friendsLoading ? 'Refreshing...' : 'Refresh Status'}
+        </button>
+      </div>
+
       {acceptedNotifications.length > 0 && (
         <div className="space-y-3">
           {acceptedNotifications.map(friend => (
@@ -692,6 +981,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#07070f] text-white">
+      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-32 left-1/4 w-125 h-125 rounded-full bg-indigo-700/15 blur-[120px]" />
         <div className="absolute bottom-0 right-1/4 w-100 h-100 rounded-full bg-violet-700/10 blur-[120px]" />

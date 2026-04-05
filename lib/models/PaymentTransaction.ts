@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
-export type PaymentMethod = 'UPI_DEMO' | 'RAZORPAY';
+export type PaymentMethod = 'UPI_DEMO' | 'RAZORPAY' | 'CASH';
 export type PaymentStatus = 'initiated' | 'processing' | 'success' | 'failed';
 export type ReminderStatus = 'none' | 'scheduled' | 'sent';
 
@@ -19,7 +19,7 @@ export interface IPaymentTransaction extends Document {
   currency: 'INR';
   method: PaymentMethod;
   status: PaymentStatus;
-  provider: 'SIMULATED_UPI' | 'RAZORPAY';
+  provider: 'SIMULATED_UPI' | 'RAZORPAY' | 'OFFLINE_CASH';
   providerOrderId: string;
   providerTxnId?: string;
   
@@ -56,9 +56,9 @@ const PaymentTransactionSchema = new Schema<IPaymentTransaction>(
     to: { type: String, required: true },
     amount: { type: Number, required: true },
     currency: { type: String, default: 'INR' },
-    method: { type: String, enum: ['UPI_DEMO', 'RAZORPAY'], default: 'UPI_DEMO' },
+    method: { type: String, enum: ['UPI_DEMO', 'RAZORPAY', 'CASH'], default: 'UPI_DEMO' },
     status: { type: String, enum: ['initiated', 'processing', 'success', 'failed'], default: 'initiated', index: true },
-    provider: { type: String, enum: ['SIMULATED_UPI', 'RAZORPAY'], default: 'SIMULATED_UPI' },
+    provider: { type: String, enum: ['SIMULATED_UPI', 'RAZORPAY', 'OFFLINE_CASH'], default: 'SIMULATED_UPI' },
     providerOrderId: { type: String, required: true, unique: true },
     providerTxnId: { type: String },
     razorpayOrderId: { type: String, index: true },
@@ -77,6 +77,19 @@ const PaymentTransactionSchema = new Schema<IPaymentTransaction>(
 
 PaymentTransactionSchema.index({ groupId: 1, createdAt: -1 });
 PaymentTransactionSchema.index({ groupId: 1, from: 1, to: 1, amount: 1, status: 1 });
+
+const existingModel = mongoose.models.PaymentTransaction as Model<IPaymentTransaction> | undefined;
+if (existingModel) {
+  const methodPath = existingModel.schema.path('method') as mongoose.SchemaType & { enumValues?: string[] };
+  const providerPath = existingModel.schema.path('provider') as mongoose.SchemaType & { enumValues?: string[] };
+  const hasCashMethod = Array.isArray(methodPath?.enumValues) && methodPath.enumValues.includes('CASH');
+  const hasOfflineCashProvider = Array.isArray(providerPath?.enumValues) && providerPath.enumValues.includes('OFFLINE_CASH');
+
+  // In dev hot-reload, Mongoose may keep a stale model schema; refresh when new enum values are missing.
+  if (!hasCashMethod || !hasOfflineCashProvider) {
+    delete mongoose.models.PaymentTransaction;
+  }
+}
 
 const PaymentTransaction: Model<IPaymentTransaction> =
   mongoose.models.PaymentTransaction ??

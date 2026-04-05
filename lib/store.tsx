@@ -18,6 +18,9 @@ export interface Friend {
   settledAt?: string;
   unread?: boolean;
   paymentStatus?: 'pending' | 'done' | 'none';
+  paidAmount?: number;
+  remainingAmount?: number;
+  totalPayableAmount?: number;
   lastUpdateType?: 'created' | 'accepted' | 'balance_updated' | 'settled' | 'unsettled' | 'note_updated';
   lastUpdatedAt?: string;
   status: 'accepted' | 'pending';
