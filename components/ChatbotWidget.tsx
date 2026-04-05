@@ -38,7 +38,7 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
   const router = useRouter();
   const params = useParams();
   const { user } = useUser();
-  const { getGroup, getNetBalances, getGroupExpenses } = useStore();
+  const { groups, getGroup, getNetBalances, getGroupExpenses, getGroupSettlements, getGroupPayments } = useStore();
   
   const activeGroupId = groupId || (params?.id as string);
 
@@ -134,13 +134,29 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
   }, [removeHighlight]);
 
   const buildContext = useCallback(() => {
+    const allGroupsSummary = groups.map(g => {
+      const expenses = getGroupExpenses(g.id);
+      const total = expenses.reduce((s, e) => s + e.amount, 0);
+      return {
+        id: g.id,
+        name: g.name,
+        memberCount: g.members.length,
+        totalExpenses: total,
+        type: g.type
+      };
+    });
+
     if (!activeGroupId) return { 
       user: user?.fullName || user?.firstName || 'User',
-      ui: { currentPage: typeof window !== 'undefined' ? window.location.pathname : '/', availableActions: ["view_balances"] }
+      allGroups: allGroupsSummary,
+      ui: { 
+        currentPage: typeof window !== 'undefined' ? window.location.pathname : '/', 
+        availableActions: ["create_group", "view_balances", "optimize_debts"] 
+      }
     };
     
     const group = getGroup(activeGroupId);
-    if (!group) return {};
+    if (!group) return { allGroups: allGroupsSummary };
 
     // --- STEP 4: FIX ID -> NAME MAPPING ---
     const memberMap = new Map(group.members.map(m => [m.id, m.name]));
@@ -150,8 +166,8 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
       Object.entries(rawBalances).map(([id, amount]) => [memberMap.get(id) || id, amount])
     );
 
-    const mappedExpenses = getGroupExpenses(activeGroupId)
-      .slice(0, 8)
+    const recentExpenses = getGroupExpenses(activeGroupId)
+      .slice(0, 10)
       .map(e => ({
         description: e.description,
         amount: e.amount,
@@ -160,27 +176,55 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
         date: e.createdAt
       }));
 
-    const totalExpenses = getGroupExpenses(activeGroupId).reduce((s, e) => s + e.amount, 0);
+    const recentPayments = getGroupPayments(activeGroupId)
+      .slice(0, 5)
+      .map(p => ({
+        from: memberMap.get(p.from) || p.from,
+        to: memberMap.get(p.to) || p.to,
+        amount: p.amount,
+        status: p.status
+      }));
+
+    const pendingSettlements = getGroupSettlements(activeGroupId)
+      .map(s => ({
+        from: memberMap.get(s.from) || s.from,
+        to: memberMap.get(s.to) || s.to,
+        amount: s.amount
+      }));
+
+    const groupExpenses = getGroupExpenses(activeGroupId);
+    const totalExpenses = groupExpenses.reduce((s, e) => s + e.amount, 0);
+    
+    // Analytics breakdown
+    const categoryBreakdown: Record<string, number> = {};
+    groupExpenses.forEach(e => {
+      categoryBreakdown[e.category] = (categoryBreakdown[e.category] || 0) + e.amount;
+    });
 
     return {
       user: user?.fullName || user?.firstName || 'User',
-      group: {
+      allGroups: allGroupsSummary,
+      activeGroup: {
         id: group.id,
         name: group.name,
         type: group.type,
         members: group.members.map(m => m.name),
+        metrics: {
+          totalGroupExpenses: totalExpenses,
+          paymentCount: recentPayments.length,
+          categoryBreakdown
+        },
+        balances: mappedBalances,
+        expenses: recentExpenses,
+        payments: recentPayments,
+        settlements: pendingSettlements
       },
-      metrics: {
-        totalGroupExpenses: totalExpenses
-      },
-      balances: mappedBalances,
-      recentExpenses: mappedExpenses,
       ui: {
         currentPage: typeof window !== 'undefined' ? window.location.pathname : '/',
         availableActions: ["add_expense", "settle", "view_balances", "optimize_debts"]
       }
     };
-  }, [activeGroupId, getGroup, getNetBalances, getGroupExpenses, user]);
+  }, [activeGroupId, getGroup, getNetBalances, getGroupExpenses, getGroupSettlements, getGroupPayments, user, groups]);
 
   const sendMessage = useCallback(async (userText: string) => {
     if (!userText.trim() || isTyping) return;
