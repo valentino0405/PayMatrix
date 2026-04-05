@@ -49,6 +49,7 @@ export default function LandingPage() {
 
         <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row">
           <Link
+            id="get-started-btn"
             href="/dashboard"
             className="flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-3.5 text-base font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_30px_rgba(99,102,241,0.5)] hover:-translate-y-0.5"
           >

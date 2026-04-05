@@ -280,8 +280,6 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
       <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
         {children}
       </main>
-
-      <ChatbotWidget groupId={id} />
     </div>
   );
 }

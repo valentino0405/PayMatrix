@@ -52,6 +52,14 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    if (lowerMessage.includes("walkthrough") || lowerMessage.includes("walk me through") || lowerMessage.includes("how to use") || lowerMessage.includes("get started") || lowerMessage.includes("guide me") || lowerMessage.includes("show me") || lowerMessage.includes("tutorial")) {
+      return NextResponse.json({
+        text: "I'd love to show you around! I'm starting our interactive, step-by-step guide now. 🚀",
+        action: 'walkthrough_start',
+        uiTarget: null
+      });
+    }
+
     if (lowerMessage.includes("settle") || lowerMessage.includes("optimize")) {
       return NextResponse.json({
         text: "I'll take you to the settlement optimizer where we can minimize transactions! 🚀",

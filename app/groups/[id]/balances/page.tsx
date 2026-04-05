@@ -48,7 +48,7 @@ export default function BalancesPage() {
   return (
     <div>
       {/* Summary */}
-      <div className="mb-6 grid grid-cols-3 gap-3">
+      <div id="balance-section" className="mb-6 grid grid-cols-3 gap-3">
         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4 text-center">
           <TrendingUp className="mx-auto mb-1 h-5 w-5 text-emerald-400" />
           <div className="text-lg font-extrabold text-emerald-400">₹{totalOwed.toFixed(0)}</div>
@@ -123,6 +123,7 @@ export default function BalancesPage() {
         <div className="mt-6 rounded-2xl border border-indigo-500/20 bg-indigo-500/[0.07] p-5 text-center">
           <p className="text-slate-300 text-sm mb-3">Ready to settle? Use our optimizer to minimize transactions.</p>
           <Link
+            id="optimize-settle-btn"
             href={`/groups/${id}/settle`}
             className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)]"
           >
