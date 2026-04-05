@@ -20,6 +20,10 @@ export const metadata: Metadata = {
   description: "Split expenses and settle smarter with PayMatrix's graph-based settlement optimizer.",
 };
 
+import { WalkthroughProvider } from "@/lib/walkthrough-context";
+import WalkthroughOverlay from "@/components/WalkthroughOverlay";
+import ChatbotWidget from "@/components/ChatbotWidget";
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -29,8 +33,14 @@ export default function RootLayout({
         className={`${manrope.variable} ${geistMono.variable} h-full antialiased`}
         lang="en"
       >
-        <body className="min-h-full flex flex-col">
-          <StoreProvider>{children}</StoreProvider>
+        <body className="min-h-full flex flex-col font-sans">
+          <StoreProvider>
+            <WalkthroughProvider>
+              {children}
+              <WalkthroughOverlay />
+              <ChatbotWidget />
+            </WalkthroughProvider>
+          </StoreProvider>
         </body>
       </html>
     </ClerkProvider>

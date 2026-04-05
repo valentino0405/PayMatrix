@@ -231,7 +231,7 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#111118] shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div id="add-expense-modal" className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#111118] shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-white/[0.07] sticky top-0 bg-[#111118] z-10">
           <h2 className="text-lg font-bold text-white">Add Expense</h2>
           <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-white/10 hover:text-white transition-colors"><X className="h-4 w-4" /></button>

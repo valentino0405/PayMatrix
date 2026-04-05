@@ -238,7 +238,7 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#111118] shadow-2xl overflow-hidden">
+      <div id="create-group-modal" className="w-full max-w-md rounded-3xl border border-white/10 bg-[#111118] shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between p-6 border-b border-white/[0.07]">
           <h2 className="text-lg font-bold text-white">Create New Group</h2>
           <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-white/10 transition-colors"><X className="h-4 w-4" /></button>
@@ -246,7 +246,7 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Group Name</label>
-            <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Goa Trip 🌊"
+            <input id="group-name-input" autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Goa Trip 🌊"
               className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 transition-all" />
           </div>
           <div>
@@ -269,7 +269,7 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
                     {m.name ? m.name[0].toUpperCase() : '?'}
                   </div>
                   <div className="flex-1 space-y-1.5">
-                    <input value={m.name} onChange={e => setMembers(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder={`Member ${i + 1} Name`}
+                    <input id="add-member-input" value={m.name} onChange={e => setMembers(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder={`Member ${i + 1} Name`}
                       className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 transition-all" />
                     <input value={m.email} onChange={e => setMembers(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder={`Email (for global identity)`} type="email"
                       className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 transition-all" />
@@ -287,7 +287,7 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
               <Plus className="h-3.5 w-3.5" /> Add member
             </button>
           </div>
-          <button type="submit" disabled={busy}
+          <button id="submit-group-btn" type="submit" disabled={busy}
             className="w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white hover:bg-indigo-500 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
             {busy ? <><Loader2 className="h-4 w-4 animate-spin" />Creating...</> : 'Create Group →'}
           </button>
@@ -574,7 +574,7 @@ function GroupsTab({ onCreateGroup }: { onCreateGroup: () => void }) {
       </div>
       <h2 className="text-2xl font-bold text-white">No groups yet</h2>
       <p className="mt-2 max-w-sm text-slate-400">Create a group to start splitting expenses with multiple people.</p>
-      <button onClick={onCreateGroup} className="mt-8 flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white hover:bg-indigo-500 transition-all">
+      <button id="create-group-btn" onClick={onCreateGroup} className="mt-8 flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white hover:bg-indigo-500 transition-all">
         <Plus className="h-4 w-4" /> Create Group
       </button>
     </div>
@@ -686,7 +686,7 @@ export default function DashboardPage() {
                   <UserPlus className="h-4 w-4" /> Add Friend
                 </button>
               ) : (
-                <button onClick={() => setShowCreate(true)}
+                <button id="create-group-btn-nav" onClick={() => setShowCreate(true)}
                   className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)]">
                   <Plus className="h-4 w-4" /> New Group
                 </button>

@@ -7,6 +7,7 @@ import {
   TrendingUp, Plus, ChevronDown, Mic, MicOff
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
+import { useWalkthrough } from '@/lib/walkthrough-context';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -15,11 +16,12 @@ interface Message {
 
 interface AIResponse {
   text: string;
-  action: 'highlight' | 'navigate' | 'no_action';
+  action: 'highlight' | 'navigate' | 'no_action' | 'walkthrough_start';
   uiTarget: string | null;
 }
 
 const SUGGESTIONS = [
+  { icon: Sparkles,    label: 'Walk me through'      },
   { icon: DollarSign,  label: 'Who owes me?'         },
   { icon: TrendingUp,  label: 'Optimize my debts'    },
   { icon: Plus,        label: 'Add an expense'        },
@@ -36,6 +38,7 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
   const router = useRouter();
   const { user } = useUser();
   const { getGroup, getNetBalances, getGroupExpenses } = useStore();
+  const { startWalkthrough } = useWalkthrough();
 
   const [isOpen, setIsOpen]     = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -48,6 +51,7 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
   const [isTyping, setIsTyping] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [highlightedEl, setHighlightedEl] = useState<HTMLElement | null>(null);
+  const [showNudge, setShowNudge] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLInputElement>(null);
@@ -63,14 +67,32 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
 
   const [isNudged, setIsNudged] = useState(false);
   useEffect(() => {
+    // Show text bubble nudge after 3 seconds
+    const nudgeTimer = setTimeout(() => {
+      if (!isOpen) setShowNudge(true);
+    }, 3000);
+
+    // Hide bubble after 10 seconds
+    const hideTimer = setTimeout(() => {
+      setShowNudge(false);
+    }, 13000);
+
     if (!isOpen && !isNudged) {
-      const timer = setTimeout(() => {
+      const authNudge = setTimeout(() => {
         setIsNudged(true);
         setTimeout(() => setIsNudged(false), 5000);
       }, 8000);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(nudgeTimer);
+        clearTimeout(hideTimer);
+        clearTimeout(authNudge);
+      };
     }
-  }, [isOpen, isNudged]);
+    return () => {
+      clearTimeout(nudgeTimer);
+      clearTimeout(hideTimer);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     return () => { removeHighlight(); };
@@ -176,10 +198,15 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
       if (contentType?.includes('application/json')) {
         const data: AIResponse = await res.json();
         setMessages(prev => [...prev, { role: 'assistant', content: data.text }]);
-        if (data.action === 'highlight' && data.uiTarget) {
-          applyHighlight(data.uiTarget);
-        } else if (data.action === 'navigate' && data.uiTarget) {
-          setTimeout(() => router.push(data.uiTarget!), 800);
+        if (data.action === 'navigate') {
+          router.push(data.uiTarget!);
+        } else if (data.action === 'highlight') {
+          const el = document.querySelector(data.uiTarget!);
+          if (el) el.classList.add('ring-4', 'ring-indigo-500', 'ring-offset-2', 'transition-all', 'duration-500');
+        } else if (data.action as string === 'walkthrough_start') {
+          setIsTyping(false);
+          startWalkthrough();
+          return;
         }
       } 
       else {
@@ -390,6 +417,47 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
           </form>
           <p className="mt-1.5 text-center text-[9px] text-slate-600 tracking-wide uppercase">OpenRouter AI Integration • Smarter Settlements</p>
         </div>
+      </div>
+      
+      {/* Toggle Button & Nudge Bubble */}
+      <div className="fixed bottom-6 right-6 z-100 flex flex-col items-end gap-3">
+        {showNudge && !isOpen && (
+          <button
+            onClick={() => {
+              setIsOpen(true);
+              const mockEvent = { preventDefault: () => {} } as React.FormEvent;
+              setInput('Walk me through the app');
+              setShowNudge(false);
+              // We'll let the user hit enter or we can trigger handleSubmit manually
+              // For better UX, we'll just open and populate the input
+            }}
+            className="group relative flex items-center gap-3 rounded-2xl border border-indigo-500/30 bg-[#111118]/90 p-3 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-500 pointer-events-auto"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-400">
+              <Sparkles className="h-4 w-4 animate-pulse" />
+            </div>
+            <div className="text-left">
+              <p className="text-xs font-bold text-white">New here?</p>
+              <p className="text-[10px] text-slate-400">Click for a complete walkthrough 🚀</p>
+            </div>
+            <div className="absolute -bottom-1.5 right-6 h-3 w-3 rotate-45 border-r border-b border-indigo-500/30 bg-[#111118]" />
+          </button>
+        )}
+        
+        <button
+          id="chatbot-toggle-btn"
+          onClick={() => {
+            setIsOpen(!isOpen);
+            setShowNudge(false);
+          }}
+          className={`group flex h-14 w-14 items-center justify-center rounded-2xl transition-all duration-500 pointer-events-auto ${
+            isOpen 
+              ? 'bg-[#1a1a2e] text-white shadow-2xl rotate-90' 
+              : `bg-indigo-600 text-white shadow-[0_8px_32px_rgba(99,102,241,0.5)] hover:bg-indigo-500 hover:scale-110 ${isNudged ? 'animate-bounce' : ''}`
+          }`}
+        >
+          {isOpen ? <X className="h-6 w-6" /> : <Bot className="h-7 w-7" />}
+        </button>
       </div>
 
       {highlightedEl && (
