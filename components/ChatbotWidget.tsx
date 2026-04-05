@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import {
   Bot, X, Send, Sparkles, Loader2, DollarSign,
@@ -36,8 +36,12 @@ declare global {
 
 export default function ChatbotWidget({ groupId }: { groupId?: string }) {
   const router = useRouter();
+  const params = useParams();
   const { user } = useUser();
   const { getGroup, getNetBalances, getGroupExpenses } = useStore();
+  
+  const activeGroupId = groupId || (params?.id as string);
+
   const { startWalkthrough } = useWalkthrough();
 
   const [isOpen, setIsOpen]     = useState(false);
@@ -130,23 +134,23 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
   }, [removeHighlight]);
 
   const buildContext = useCallback(() => {
-    if (!groupId) return { 
+    if (!activeGroupId) return { 
       user: user?.fullName || user?.firstName || 'User',
       ui: { currentPage: typeof window !== 'undefined' ? window.location.pathname : '/', availableActions: ["view_balances"] }
     };
     
-    const group = getGroup(groupId);
+    const group = getGroup(activeGroupId);
     if (!group) return {};
 
     // --- STEP 4: FIX ID -> NAME MAPPING ---
     const memberMap = new Map(group.members.map(m => [m.id, m.name]));
     
-    const rawBalances = getNetBalances(groupId, true);
+    const rawBalances = getNetBalances(activeGroupId, true);
     const mappedBalances = Object.fromEntries(
       Object.entries(rawBalances).map(([id, amount]) => [memberMap.get(id) || id, amount])
     );
 
-    const mappedExpenses = getGroupExpenses(groupId)
+    const mappedExpenses = getGroupExpenses(activeGroupId)
       .slice(0, 8)
       .map(e => ({
         description: e.description,
@@ -156,6 +160,8 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
         date: e.createdAt
       }));
 
+    const totalExpenses = getGroupExpenses(activeGroupId).reduce((s, e) => s + e.amount, 0);
+
     return {
       user: user?.fullName || user?.firstName || 'User',
       group: {
@@ -164,14 +170,17 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
         type: group.type,
         members: group.members.map(m => m.name),
       },
+      metrics: {
+        totalGroupExpenses: totalExpenses
+      },
       balances: mappedBalances,
-      expenses: mappedExpenses,
+      recentExpenses: mappedExpenses,
       ui: {
         currentPage: typeof window !== 'undefined' ? window.location.pathname : '/',
         availableActions: ["add_expense", "settle", "view_balances", "optimize_debts"]
       }
     };
-  }, [groupId, getGroup, getNetBalances, getGroupExpenses, user]);
+  }, [activeGroupId, getGroup, getNetBalances, getGroupExpenses, user]);
 
   const sendMessage = useCallback(async (userText: string) => {
     if (!userText.trim() || isTyping) return;
