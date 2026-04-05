@@ -47,7 +47,7 @@ export default function CurrencyConverter({ onClose, initialAmount }: CurrencyCo
         onClick={e => e.stopPropagation()}
       >
         {/* Top accent bar */}
-        <div className="h-1 bg-gradient-to-r from-indigo-500 via-violet-500 to-emerald-500" />
+        <div className="h-1 bg-linear-to-r from-indigo-500 via-violet-500 to-emerald-500" />
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.07]">
@@ -190,7 +190,7 @@ export default function CurrencyConverter({ onClose, initialAmount }: CurrencyCo
                     <button
                       key={code}
                       onClick={() => setTo(code)}
-                      className="flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-left hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-all group"
+                      className="flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/3 px-3 py-2.5 text-left hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-all group"
                     >
                       <span className="text-base">{cur.flag}</span>
                       <div>

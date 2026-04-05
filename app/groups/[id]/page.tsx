@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { Plus, X, Trash2, UtensilsCrossed, Plane, Home, PartyPopper, ShoppingBag, Zap, Heart, MoreHorizontal, Search, Filter, Sparkles, AlertTriangle, Mic, ScanLine } from 'lucide-react';
 import { useStore, Category, SplitType, Member } from '@/lib/store';
 import CurrencyConverter from '@/components/CurrencyConverter';
+import { useCurrency, SUPPORTED_CURRENCIES } from '@/lib/useCurrency';
 
 // Allow SpeechRecognition types
 declare global {
@@ -74,9 +75,11 @@ function parseNLP(text: string, members: Member[]): { amount?: number; category?
 
 function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () => void }) {
   const { getGroup, addExpense } = useStore();
+  const { convert, getSymbol, loading: ratesLoading, error: ratesError } = useCurrency();
   const group = getGroup(groupId)!;
   const [desc, setDesc] = useState('');
   const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState('INR');
   const [paidBy, setPaidBy] = useState(group.members[0]?.id ?? '');
   const [category, setCategory] = useState<Category>('Food');
   const [splitType, setSplitType] = useState<SplitType>('equal');
@@ -168,10 +171,13 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
     const total = parseFloat(amount);
     if (!desc.trim()) { setError('Enter a description'); return false; }
     if (!total || total <= 0) { setError('Enter a valid amount'); return false; }
+    if (currency !== 'INR' && ratesLoading) { setError('Exchange rates are loading. Please wait a moment.'); return false; }
+    if (currency !== 'INR' && ratesError) { setError('Could not load exchange rates. Please try again or use INR.'); return false; }
     if (!paidBy) { setError('Select who paid'); return false; }
     if (splitType === 'unequal') {
       const sum = Object.values(splits).reduce((a, v) => a + parseFloat(v || '0'), 0);
-      if (Math.abs(sum - total) > 0.5) { setError(`Splits must add to ₹${total} (currently ₹${sum.toFixed(2)})`); return false; }
+      const symbol = getSymbol(currency);
+      if (Math.abs(sum - total) > 0.5) { setError(`Splits must add to ${symbol}${total} (currently ${symbol}${sum.toFixed(2)})`); return false; }
     }
     if (splitType === 'percentage') {
       const sum = Object.values(splits).reduce((a, v) => a + parseFloat(v || '0'), 0);
@@ -184,22 +190,40 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
     e.preventDefault();
     setError('');
     if (!validate()) return;
-    const total = parseFloat(amount);
+    const enteredTotal = parseFloat(amount);
+    const conversionRate = currency === 'INR' ? 1 : convert(1, currency, 'INR');
+    const total = Math.round((currency === 'INR' ? enteredTotal : convert(enteredTotal, currency, 'INR')) * 100) / 100;
     const finalSplits = group.members.map(m => {
       let amt: number;
       if (splitType === 'equal') amt = total / group.members.length;
       else if (splitType === 'percentage') amt = (parseFloat(splits[m.id] || '0') / 100) * total;
-      else amt = parseFloat(splits[m.id] || '0');
+      else {
+        const entered = parseFloat(splits[m.id] || '0');
+        amt = currency === 'INR' ? entered : convert(entered, currency, 'INR');
+      }
       return { memberId: m.id, amount: Math.round(amt * 100) / 100 };
     });
     setSubmitting(true);
     try {
-      await addExpense({ groupId, description: desc.trim(), amount: total, paidBy, splitType, splits: finalSplits, category });
+      await addExpense({
+        groupId,
+        description: desc.trim(),
+        amount: total,
+        originalAmount: enteredTotal,
+        originalCurrency: currency,
+        conversionRate,
+        paidBy,
+        splitType,
+        splits: finalSplits,
+        category,
+      });
       onClose();
     } finally { setSubmitting(false); }
   };
 
   const total = parseFloat(amount) || 0;
+  const inrPreview = currency === 'INR' ? total : convert(total, currency, 'INR');
+  const selectedCurrency = SUPPORTED_CURRENCIES.find(c => c.code === currency);
   const getPctSum = () => Object.values(splits).reduce((a, v) => a + parseFloat(v || '0'), 0);
   const getUnequalSum = () => Object.values(splits).reduce((a, v) => a + parseFloat(v || '0'), 0);
 
@@ -246,9 +270,28 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
             )}
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Amount (₹)</label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Amount</label>
+              <select
+                value={currency}
+                onChange={e => setCurrency(e.target.value)}
+                className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold text-white outline-none focus:border-indigo-500/60"
+              >
+                {SUPPORTED_CURRENCIES.map(c => (
+                  <option key={c.code} value={c.code} className="bg-[#1a1a2e] text-white">
+                    {c.flag} {c.code}
+                  </option>
+                ))}
+              </select>
+            </div>
             <input type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00"
               className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 transition-all text-xl font-bold" />
+            <div className="mt-1.5 text-xs text-slate-500">
+              Entered in {selectedCurrency?.code ?? currency} {selectedCurrency?.flag ?? ''}
+              {currency !== 'INR' && (
+                <span className="text-indigo-300"> · Converted: ₹{(Number.isFinite(inrPreview) ? inrPreview : 0).toFixed(2)} INR</span>
+              )}
+            </div>
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Paid by</label>
@@ -301,7 +344,7 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Member Splits</label>
                 <span className={`text-xs font-bold ${splitType === 'percentage' ? Math.abs(getPctSum() - 100) < 0.5 ? 'text-emerald-400' : 'text-rose-400' : Math.abs(getUnequalSum() - total) < 0.5 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {splitType === 'percentage' ? `${getPctSum().toFixed(1)} / 100%` : `₹${getUnequalSum().toFixed(0)} / ₹${total}`}
+                  {splitType === 'percentage' ? `${getPctSum().toFixed(1)} / 100%` : `${getSymbol(currency)}${getUnequalSum().toFixed(0)} / ${getSymbol(currency)}${total}`}
                 </span>
               </div>
               <div className="space-y-2">
@@ -311,7 +354,7 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
                     <span className="flex-1 text-sm text-slate-300">{m.name}</span>
                     <div className="relative">
                       {splitType === 'percentage' && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">%</span>}
-                      {splitType === 'unequal' && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>}
+                      {splitType === 'unequal' && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">{getSymbol(currency)}</span>}
                       <input type="number" min="0" step="0.01" value={splits[m.id] ?? ''} onChange={e => setSplits(p => ({ ...p, [m.id]: e.target.value }))}
                         className={`w-24 rounded-lg border border-white/10 bg-white/5 py-2 text-right text-sm text-white outline-none focus:border-indigo-500/60 transition-all ${splitType === 'unequal' ? 'pl-6 pr-3' : 'pl-3 pr-6'}`} />
                     </div>
@@ -322,7 +365,8 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
           )}
           {splitType === 'equal' && total > 0 && (
             <div className="rounded-xl bg-indigo-500/10 border border-indigo-500/20 px-4 py-3 text-sm text-indigo-300">
-              Each person pays <span className="font-bold">₹{(total / group.members.length).toFixed(2)}</span>
+              Each person pays <span className="font-bold">{getSymbol(currency)}{(total / group.members.length).toFixed(2)}</span>
+              {currency !== 'INR' && <span className="text-slate-400"> (≈ ₹{((inrPreview || 0) / group.members.length).toFixed(2)})</span>}
             </div>
           )}
           {error && <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-4 py-2 text-sm text-rose-400">{error}</div>}
@@ -494,6 +538,12 @@ export default function GroupExpensesPage() {
                       </div>
                       <div className="text-right shrink-0">
                         <div className="text-base font-extrabold text-white">₹{expense.amount.toLocaleString('en-IN')}</div>
+                        {expense.originalCurrency && expense.originalCurrency !== 'INR' && expense.originalAmount !== undefined && (
+                          <div className="text-[10px] text-indigo-300 mt-0.5">
+                            {SUPPORTED_CURRENCIES.find(c => c.code === expense.originalCurrency)?.symbol ?? expense.originalCurrency}
+                            {expense.originalAmount.toLocaleString('en-IN')} {expense.originalCurrency}
+                          </div>
+                        )}
                         <div className="text-[10px] text-slate-600 mt-0.5">{CATEGORY_META[expense.category].emoji} {expense.category}</div>
                         <button
                           onClick={() => deleteExpense(expense.id)}

@@ -222,7 +222,7 @@ export default function AnalyticsPage() {
       {/* ── Budget & Gamification Row ──────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Budget Module */}
-        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-5 relative overflow-hidden transition-all hover:bg-white/[0.04]">
+        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-5 relative overflow-hidden transition-all hover:bg-white/4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-bold text-white flex items-center gap-2"><Wallet className="h-4 w-4 text-emerald-400" /> Monthly Budget</h3>
             <button onClick={() => setShowBudgetModal(true)} className="flex items-center justify-center p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors">
@@ -251,7 +251,7 @@ export default function AnalyticsPage() {
               )}
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center h-20 border border-dashed border-white/20 rounded-xl bg-white/[0.02]">
+            <div className="flex flex-col items-center justify-center h-20 border border-dashed border-white/20 rounded-xl bg-white/2">
               <button onClick={() => setShowBudgetModal(true)} className="text-sm font-semibold text-emerald-400 hover:text-emerald-300">Set Monthly Budget</button>
               <p className="text-xs text-slate-500 mt-1">Get alerts on overspending</p>
             </div>
@@ -296,7 +296,7 @@ export default function AnalyticsPage() {
 
       {/* ── Smart Insights Banner ────────────────────────────────────────── */}
       {(expenses.length > 0) && (
-        <div className="rounded-2xl border border-indigo-500/20 bg-gradient-to-r from-indigo-500/[0.08] to-violet-500/[0.04] p-5">
+        <div className="rounded-2xl border border-indigo-500/20 bg-linear-to-r from-indigo-500/8 to-violet-500/4 p-5">
           <div className="flex items-center gap-2 mb-4">
             <Sparkles className="h-5 w-5 text-indigo-400" />
             <h3 className="text-base font-extrabold text-white tracking-wide">Smart Insights</h3>
@@ -304,7 +304,7 @@ export default function AnalyticsPage() {
           
           <div className="grid gap-3 sm:grid-cols-2">
             {/* Run Rate Predictor */}
-            <div className="flex items-start gap-3 rounded-xl border border-white/[0.05] bg-black/20 p-4">
+            <div className="flex items-start gap-3 rounded-xl border border-white/5 bg-black/20 p-4">
               <div className={`p-2 rounded-lg ${prediction.isOverspending ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
                 {prediction.isOverspending ? <TrendingUp className="h-4 w-4" /> : <CalendarDays className="h-4 w-4" />}
               </div>
@@ -323,7 +323,7 @@ export default function AnalyticsPage() {
 
             {/* Category Suggestion */}
             {topCategory && (
-              <div className="flex items-start gap-3 rounded-xl border border-white/[0.05] bg-black/20 p-4">
+              <div className="flex items-start gap-3 rounded-xl border border-white/5 bg-black/20 p-4">
                 <div className={`p-2 rounded-lg ${isTopCategoryWarning ? 'bg-amber-500/20 text-amber-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
                   {isTopCategoryWarning ? <AlertTriangle className="h-4 w-4" /> : <PieChart className="h-4 w-4" />}
                 </div>
