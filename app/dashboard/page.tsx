@@ -73,6 +73,7 @@ function AddFriendModal({ onClose }: { onClose: () => void }) {
     window.open(`https://wa.me/?text=${msg}`, '_blank');
   };
 
+
   // Success: show shareable link
   if (inviteUrl) {
     return (
@@ -99,12 +100,14 @@ function AddFriendModal({ onClose }: { onClose: () => void }) {
             {/* Action buttons */}
             <div className="grid grid-cols-2 gap-3 mb-3">
               <button
+                type="button"
                 onClick={handleCopy}
                 className={`flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all border ${copied ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-300' : 'border-white/10 bg-white/5 text-white hover:bg-white/10'}`}
               >
                 {copied ? <><Check className="h-4 w-4" />Copied!</> : <><Copy className="h-4 w-4" />Copy Link</>}
               </button>
               <button
+                type="button"
                 onClick={handleWhatsApp}
                 className="flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold border border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-all"
               >
