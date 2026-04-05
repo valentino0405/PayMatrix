@@ -68,12 +68,6 @@ function AddFriendModal({ onClose }: { onClose: () => void }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleWhatsApp = () => {
-    if (!inviteUrl) return;
-    const msg = encodeURIComponent(`Hey! I've added you on PayMatrix to track our expenses. Click this link to accept: ${inviteUrl}`);
-    window.open(`https://wa.me/?text=${msg}`, '_blank');
-  };
-
 
   // Success: show shareable link
   if (inviteUrl) {
@@ -88,7 +82,7 @@ function AddFriendModal({ onClose }: { onClose: () => void }) {
               </div>
               <h2 className="text-lg font-bold text-white">Share this invite link!</h2>
               <p className="mt-1 text-xs text-slate-400">
-                Send this link to <span className="text-indigo-300 font-medium">{email}</span> via WhatsApp, iMessage, or any app
+                Send this link to <span className="text-indigo-300 font-medium">{email}</span> using your preferred messaging app
               </p>
             </div>
 
@@ -99,20 +93,13 @@ function AddFriendModal({ onClose }: { onClose: () => void }) {
             </div>
 
             {/* Action buttons */}
-            <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="mb-3">
               <button
                 type="button"
                 onClick={handleCopy}
-                className={`flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all border ${copied ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-300' : 'border-white/10 bg-white/5 text-white hover:bg-white/10'}`}
+                className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all border ${copied ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-300' : 'border-white/10 bg-white/5 text-white hover:bg-white/10'}`}
               >
                 {copied ? <><Check className="h-4 w-4" />Copied!</> : <><Copy className="h-4 w-4" />Copy Link</>}
-              </button>
-              <button
-                type="button"
-                onClick={handleWhatsApp}
-                className="flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold border border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-all"
-              >
-                <span className="text-base">💬</span> WhatsApp
               </button>
             </div>
 
@@ -438,14 +425,27 @@ function FriendCard({ friend }: { friend: Friend }) {
 
 /* ─── Friends Tab ──────────────────────────────── */
 function FriendsTab({ onAddFriend }: { onAddFriend: () => void }) {
-  const { friends, friendsLoading } = useStore();
+  const { friends, friendsLoading, markFriendRead } = useStore();
+  const [markingAcceptedId, setMarkingAcceptedId] = useState<string | null>(null);
   const safeFriends = Array.isArray(friends) ? friends : [];
   const active  = safeFriends.filter(f => !f.settled && f.status === 'accepted');
   const pending = safeFriends.filter(f => f.status === 'pending');
   const settled = safeFriends.filter(f => f.settled && f.status === 'accepted');
+  const acceptedNotifications = safeFriends.filter(
+    f => f.status === 'accepted' && f.unread && f.lastUpdateType === 'accepted'
+  );
 
   const totalOwed = active.filter(f => f.balance > 0).reduce((s, f) => s + f.balance, 0);
   const totalOwe  = active.filter(f => f.balance < 0).reduce((s, f) => s + Math.abs(f.balance), 0);
+
+  const handleDismissAccepted = async (friendId: string) => {
+    setMarkingAcceptedId(friendId);
+    try {
+      await markFriendRead(friendId);
+    } finally {
+      setMarkingAcceptedId(null);
+    }
+  };
 
   if (friendsLoading) {
     return (
@@ -476,6 +476,34 @@ function FriendsTab({ onAddFriend }: { onAddFriend: () => void }) {
 
   return (
     <div className="space-y-8">
+      {acceptedNotifications.length > 0 && (
+        <div className="space-y-3">
+          {acceptedNotifications.map(friend => (
+            <div
+              key={`accepted-${friend.id}`}
+              className="rounded-2xl border border-emerald-500/25 bg-emerald-500/8 p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">Friend request accepted</p>
+                  <p className="mt-1 text-sm text-emerald-100">
+                    {friend.name} accepted your friend request.
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleDismissAccepted(friend.id)}
+                  disabled={markingAcceptedId === friend.id}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-60"
+                >
+                  {markingAcceptedId === friend.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
+                  Mark read
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/6 p-4">
@@ -651,12 +679,16 @@ function GroupsTab({ onCreateGroup }: { onCreateGroup: () => void }) {
 
 /* ─── Dashboard Page ───────────────────────────── */
 export default function DashboardPage() {
+  const { refreshFriends } = useStore();
   const [tab, setTab]                 = useState<Tab>('groups');
   const [showCreate, setShowCreate]   = useState(false);
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [showCurrency, setShowCurrency]   = useState(false);
 
-  useEffect(() => { syncUser().catch(console.error); }, []);
+  useEffect(() => {
+    syncUser().catch(console.error);
+    refreshFriends().catch(console.error);
+  }, [refreshFriends]);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#07070f] text-white">
