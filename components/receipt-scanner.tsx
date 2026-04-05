@@ -20,47 +20,177 @@ interface ParsedReceipt {
   amount: string;
   date: string;
   description: string;
+  confidence: number;
+  isGSTBill: boolean;
 }
 
 const GROUP_TYPES: GroupType[] = ['Trip', 'Roommates', 'Event', 'Other'];
 
-/* ─── Helpers ────────────────────────────────────────────── */
-function parseReceiptText(text: string): ParsedReceipt {
+/**
+ * Intelligent OCR Normalization
+ * Fixes common Tesseract misreadings based on context.
+ */
+function normalizeOCRText(text: string): string {
+  return text
+    .replace(/\bT0TAL\b/gi, 'TOTAL')
+    .replace(/\b5GST\b/gi, 'SGST')
+    .replace(/\bC6ST\b/gi, 'CGST')
+    .replace(/\b1NR\b/gi, 'INR')
+    .replace(/\bGRANO\b/gi, 'GRAND')
+    .replace(/(\d)\s+([,\.])\s+(\d)/g, '$1$2$3') // Fix split decimals
+    .replace(/\bO(\d)/g, '0$1') // O followed by digit -> 0
+    .replace(/(\d)O\b/g, '$10'); // Digit followed by O -> 0
+}
+
+function parseReceiptText(rawText: string): ParsedReceipt {
+  const text = normalizeOCRText(rawText);
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
 
-  /* Amount — look for "total / grand total / amount due" near a $ value */
+  /* ── Intelligent Amount Extraction ──────────────────────────────────── */
+
+  const findAmountAfterLabel = (keywords: string[]): { val: number; str: string } => {
+    const labelRegex = new RegExp(`(?:${keywords.join('|')})`, 'i');
+    // Prefer decimals but also allow whole numbers. Increased robustness for Indian symbols.
+    const amtRegex = /(?:₹|rs\.?|inr|\/-)?\s*([\d,]+\.\d{2}|[\d,]+)/gi;
+
+    let bestVal = 0;
+    let foundStr = '';
+
+    for (let i = 0; i < lines.length; i++) {
+      if (labelRegex.test(lines[i])) {
+        // Line found. Search context: this line + next line
+        const context = lines[i] + (i + 1 < lines.length ? ' ' + lines[i + 1] : '');
+        const matches = [...context.matchAll(amtRegex)];
+
+        for (const m of matches) {
+          const val = parseFloat(m[1].replace(/,/g, ''));
+          // In receipts, the "Total" we want is almost always the LARGEST value associated with the label.
+          // This prevents "Total Items: 3" from beating "Total Amount: 968.00".
+          if (!isNaN(val) && val > bestVal) {
+            bestVal = val;
+            foundStr = m[1].replace(/,/g, '');
+          }
+        }
+      }
+    }
+    return { val: bestVal, str: foundStr };
+  };
+
+  // 1. Identify specific tax components to help validation
+  const subtotalLine = findAmountAfterLabel(['sub[-\\s]?total', 'gross\\s*amount']);
+  const cgstLine = findAmountAfterLabel(['cgst', 'central\\s*gst']);
+  const sgstLine = findAmountAfterLabel(['sgst', 'state\\s*gst']);
+  const igstLine = findAmountAfterLabel(['igst', 'integrated\\s*gst']);
+
+  // 2. Identify Total Candidates
+  // High confidence keywords
+  const grandTotal = findAmountAfterLabel(['grand\\s*total', 'net\\s*payable', 'round\\s*off', 'net\\s*to\\s*pay', 'invoice\\s*value', 'amount\\s*payable', 'payable\\s*amount']);
+  
+  // Medium confidence (can be ambiguous)
+  const genericTotal = findAmountAfterLabel(['total\\s*amount', 'amount\\s*due', 'bill\\s*total', '\\btotal\\b(?!\\s*items)']);
+
   let amount = '';
-  const amountPatterns = [
-    /(?:grand\s+total|total\s+amount|amount\s+due|total)[^\d]*(?:₹|rs\.?|inr|\$)?\s*([\d,]+\.?\d{0,2})/i,
-    /(?:₹|rs\.?|inr|\$)\s*([\d,]+\.?\d{0,2})/i,
-    /([\d,]+\.\d{2})/,
-  ];
-  for (const pat of amountPatterns) {
-    const m = text.match(pat);
-    if (m) {
-      amount = m[1].replace(/,/g, '').trim();
-      break;
+  let confidence = 0.3;
+  const isGSTBill = !!(cgstLine.val || sgstLine.val || igstLine.val || /\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Zz]{1}[A-Z\d]{1}/.test(text));
+
+  // Determine final amount with intelligence
+  if (grandTotal.val > 0) {
+    amount = grandTotal.str;
+    confidence = 0.9;
+  } else if (genericTotal.val > 0) {
+    amount = genericTotal.str;
+    confidence = 0.7;
+  } else {
+    // Fallback: Max value in the whole bill (statistically likely to be the total)
+    const allMatches = [...text.matchAll(/(?:₹|rs\.?|inr|\/-)?\s*([\d,]+\.\d{2})/gi)];
+    let globalMax = 0;
+    let globalStr = '';
+    
+    allMatches.forEach(m => {
+      const v = parseFloat(m[1].replace(/,/g, ''));
+      if (v > globalMax) {
+        globalMax = v;
+        globalStr = m[1].replace(/,/g, '');
+      }
+    });
+
+    if (globalMax > 0) {
+      amount = globalStr;
+      confidence = 0.4;
     }
   }
 
-  /* Date — common receipt date formats */
-  let date = '';
-  const datePatterns = [
-    /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/,
-    /\b(\d{4}[\/\-]\d{2}[\/\-]\d{2})\b/,
-    /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/i,
-  ];
-  for (const pat of datePatterns) {
-    const m = text.match(pat);
-    if (m) { date = m[1]; break; }
+  // 3. Mathematical Validation (Cross-check Subtotal + Taxes)
+  if (amount && (cgstLine.val || sgstLine.val || subtotalLine.val)) {
+    const currentAmt = parseFloat(amount);
+    const expected = subtotalLine.val + cgstLine.val + sgstLine.val + igstLine.val;
+    // Boost confidence if math matches (within 2 INR for rounding)
+    if (Math.abs(currentAmt - expected) < 2) {
+      confidence = 1.0;
+    }
   }
 
-  /* Description — first meaningful line (skip blank / pure-digit lines) */
-  const description = lines.find(
-    (l) => l.length > 2 && !/^[\d\s\.\,\$\/\-]+$/.test(l),
-  ) ?? '';
+  /* Date Extraction (Robust for Indian Formats) */
+  let date = '';
+  const datePatterns = [
+    // DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY (very common in India)
+    /\b(\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4})\b/,
+    // YYYY/MM/DD
+    /\b(\d{4}\s*[\/\-\.]\s*\d{2}\s*[\/\-\.]\s*\d{2})\b/,
+    // DD-MMM-YYYY (e.g. 23 - Jan - 2025 or 05-Apr-24)
+    /\b(\d{1,2}\s*[\/\-\.\s]\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*[\/\-\.\s,]\s*\d{2,4})\b/i,
+    // MMM DD, YYYY
+    /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*[\/\-\.\s]\s*\d{1,2}\s*,?\s*[\/\-\.\s]\s*\d{2,4})\b/i,
+  ];
 
-  return { amount, date, description };
+  // Try finding a date near a "Date" label first (highest accuracy)
+  const dateLabelRegex = /(?:date|dt|dated|on)\s*[:\-\s]*\s*/i;
+  for (let i = 0; i < lines.length; i++) {
+    if (dateLabelRegex.test(lines[i])) {
+      for (const pat of datePatterns) {
+        const m = lines[i].match(pat);
+        if (m) { date = m[1]; break; }
+        // Also check next line if label is alone
+        if (i + 1 < lines.length) {
+          const m2 = lines[i + 1].match(pat);
+          if (m2) { date = m2[1]; break; }
+        }
+      }
+      if (date) break;
+    }
+  }
+
+  // Global search fallback if no label matched
+  if (!date) {
+    for (const pat of datePatterns) {
+      const m = text.match(pat);
+      if (m) {
+        // Filter out obvious noise (like very old dates or future dates)
+        const yearPart = m[1].match(/\d{4}$|\d{2}$/);
+        const year = yearPart ? parseInt(yearPart[0]) : 0;
+        if (year > 20 || year > 2020) { // Assume 2020+ or 2-digit 20+
+          date = m[1];
+          break;
+        }
+      }
+    }
+  }
+
+  // Clean up date string (replace . with / for consistency)
+  if (date) date = date.replace(/\./g, '/').trim();
+
+  /* Description/Merchant Name Extraction */
+  const headerLines = lines.slice(0, 4).filter(l =>
+    l.length > 3 &&
+    !/invoice/i.test(l) &&
+    !/bill/i.test(l) &&
+    !/cash/i.test(l) &&
+    !/order/i.test(l) &&
+    !/store/i.test(l)
+  );
+  const description = headerLines[0] || 'Scanned Receipt';
+
+  return { amount, date, description, confidence, isGSTBill };
 }
 
 /* ─── Component ───────────────────────────────────────────── */

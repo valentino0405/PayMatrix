@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useStore, GroupType, MEMBER_COLORS, Friend } from '@/lib/store';
 import { syncUser } from '@/app/actions/userActions';
+import CurrencyConverter from '@/components/CurrencyConverter';
 
 const GROUP_TYPES: GroupType[] = ['Trip', 'Roommates', 'Event', 'Other'];
 const TYPE_EMOJI: Record<GroupType, string> = { Trip: '✈️', Roommates: '🏠', Event: '🎉', Other: '💼' };
@@ -67,11 +68,6 @@ function AddFriendModal({ onClose }: { onClose: () => void }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleWhatsApp = () => {
-    if (!inviteUrl) return;
-    const msg = encodeURIComponent(`Hey! I've added you on PayMatrix to track our expenses. Click this link to accept: ${inviteUrl}`);
-    window.open(`https://wa.me/?text=${msg}`, '_blank');
-  };
 
   // Success: show shareable link
   if (inviteUrl) {
@@ -86,7 +82,7 @@ function AddFriendModal({ onClose }: { onClose: () => void }) {
               </div>
               <h2 className="text-lg font-bold text-white">Share this invite link!</h2>
               <p className="mt-1 text-xs text-slate-400">
-                Send this link to <span className="text-indigo-300 font-medium">{email}</span> via WhatsApp, iMessage, or any app
+                Send this link to <span className="text-indigo-300 font-medium">{email}</span> using your preferred messaging app
               </p>
             </div>
 
@@ -97,18 +93,13 @@ function AddFriendModal({ onClose }: { onClose: () => void }) {
             </div>
 
             {/* Action buttons */}
-            <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="mb-3">
               <button
+                type="button"
                 onClick={handleCopy}
-                className={`flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all border ${copied ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-300' : 'border-white/10 bg-white/5 text-white hover:bg-white/10'}`}
+                className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all border ${copied ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-300' : 'border-white/10 bg-white/5 text-white hover:bg-white/10'}`}
               >
                 {copied ? <><Check className="h-4 w-4" />Copied!</> : <><Copy className="h-4 w-4" />Copy Link</>}
-              </button>
-              <button
-                onClick={handleWhatsApp}
-                className="flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold border border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-all"
-              >
-                <span className="text-base">💬</span> WhatsApp
               </button>
             </div>
 
@@ -234,7 +225,7 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#111118] shadow-2xl overflow-hidden">
+      <div id="create-group-modal" className="w-full max-w-md rounded-3xl border border-white/10 bg-[#111118] shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between p-6 border-b border-white/[0.07]">
           <h2 className="text-lg font-bold text-white">Create New Group</h2>
           <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-white/10 transition-colors"><X className="h-4 w-4" /></button>
@@ -242,7 +233,7 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Group Name</label>
-            <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Goa Trip 🌊"
+            <input id="group-name-input" autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Goa Trip 🌊"
               className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 transition-all" />
           </div>
           <div>
@@ -265,7 +256,7 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
                     {m.name ? m.name[0].toUpperCase() : '?'}
                   </div>
                   <div className="flex-1 space-y-1.5">
-                    <input value={m.name} onChange={e => setMembers(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder={`Member ${i + 1} Name`}
+                    <input id="add-member-input" value={m.name} onChange={e => setMembers(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder={`Member ${i + 1} Name`}
                       className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 transition-all" />
                     <input value={m.email} onChange={e => setMembers(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder={`Email (for global identity)`} type="email"
                       className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500/60 transition-all" />
@@ -283,7 +274,7 @@ function CreateGroupModal({ onClose }: { onClose: () => void }) {
               <Plus className="h-3.5 w-3.5" /> Add member
             </button>
           </div>
-          <button type="submit" disabled={busy}
+          <button id="submit-group-btn" type="submit" disabled={busy}
             className="w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white hover:bg-indigo-500 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
             {busy ? <><Loader2 className="h-4 w-4 animate-spin" />Creating...</> : 'Create Group →'}
           </button>
@@ -434,14 +425,27 @@ function FriendCard({ friend }: { friend: Friend }) {
 
 /* ─── Friends Tab ──────────────────────────────── */
 function FriendsTab({ onAddFriend }: { onAddFriend: () => void }) {
-  const { friends, friendsLoading } = useStore();
+  const { friends, friendsLoading, markFriendRead } = useStore();
+  const [markingAcceptedId, setMarkingAcceptedId] = useState<string | null>(null);
   const safeFriends = Array.isArray(friends) ? friends : [];
   const active  = safeFriends.filter(f => !f.settled && f.status === 'accepted');
   const pending = safeFriends.filter(f => f.status === 'pending');
   const settled = safeFriends.filter(f => f.settled && f.status === 'accepted');
+  const acceptedNotifications = safeFriends.filter(
+    f => f.status === 'accepted' && f.unread && f.lastUpdateType === 'accepted'
+  );
 
   const totalOwed = active.filter(f => f.balance > 0).reduce((s, f) => s + f.balance, 0);
   const totalOwe  = active.filter(f => f.balance < 0).reduce((s, f) => s + Math.abs(f.balance), 0);
+
+  const handleDismissAccepted = async (friendId: string) => {
+    setMarkingAcceptedId(friendId);
+    try {
+      await markFriendRead(friendId);
+    } finally {
+      setMarkingAcceptedId(null);
+    }
+  };
 
   if (friendsLoading) {
     return (
@@ -472,6 +476,34 @@ function FriendsTab({ onAddFriend }: { onAddFriend: () => void }) {
 
   return (
     <div className="space-y-8">
+      {acceptedNotifications.length > 0 && (
+        <div className="space-y-3">
+          {acceptedNotifications.map(friend => (
+            <div
+              key={`accepted-${friend.id}`}
+              className="rounded-2xl border border-emerald-500/25 bg-emerald-500/8 p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">Friend request accepted</p>
+                  <p className="mt-1 text-sm text-emerald-100">
+                    {friend.name} accepted your friend request.
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleDismissAccepted(friend.id)}
+                  disabled={markingAcceptedId === friend.id}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-60"
+                >
+                  {markingAcceptedId === friend.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
+                  Mark read
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/6 p-4">
@@ -570,7 +602,7 @@ function GroupsTab({ onCreateGroup }: { onCreateGroup: () => void }) {
       </div>
       <h2 className="text-2xl font-bold text-white">No groups yet</h2>
       <p className="mt-2 max-w-sm text-slate-400">Create a group to start splitting expenses with multiple people.</p>
-      <button onClick={onCreateGroup} className="mt-8 flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white hover:bg-indigo-500 transition-all">
+      <button id="create-group-btn" onClick={onCreateGroup} className="mt-8 flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white hover:bg-indigo-500 transition-all">
         <Plus className="h-4 w-4" /> Create Group
       </button>
     </div>
@@ -647,11 +679,16 @@ function GroupsTab({ onCreateGroup }: { onCreateGroup: () => void }) {
 
 /* ─── Dashboard Page ───────────────────────────── */
 export default function DashboardPage() {
+  const { refreshFriends } = useStore();
   const [tab, setTab]                 = useState<Tab>('groups');
   const [showCreate, setShowCreate]   = useState(false);
   const [showAddFriend, setShowAddFriend] = useState(false);
+  const [showCurrency, setShowCurrency]   = useState(false);
 
-  useEffect(() => { syncUser().catch(console.error); }, []);
+  useEffect(() => {
+    syncUser().catch(console.error);
+    refreshFriends().catch(console.error);
+  }, [refreshFriends]);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#07070f] text-white">
@@ -671,13 +708,17 @@ export default function DashboardPage() {
               <Link href="/global-settle" className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all">
                 🌍 Global Optimization
               </Link>
+              <button onClick={() => setShowCurrency(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2 text-sm font-bold text-violet-300 hover:bg-violet-500/20 transition-all">
+                💱 Convert
+              </button>
               {tab === 'friends' ? (
                 <button onClick={() => setShowAddFriend(true)}
                   className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)]">
                   <UserPlus className="h-4 w-4" /> Add Friend
                 </button>
               ) : (
-                <button onClick={() => setShowCreate(true)}
+                <button id="create-group-btn-nav" onClick={() => setShowCreate(true)}
                   className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)]">
                   <Plus className="h-4 w-4" /> New Group
                 </button>
@@ -717,8 +758,12 @@ export default function DashboardPage() {
 
           <div className="mt-2 flex gap-2 sm:hidden">
             <Link href="/global-settle" className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all">
-              🌍 Global optimization
+              🌍 Global
             </Link>
+            <button onClick={() => setShowCurrency(true)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs font-bold text-violet-300 hover:bg-violet-500/20 transition-all">
+              💱 Convert
+            </button>
             {tab === 'friends' ? (
               <button onClick={() => setShowAddFriend(true)}
                 className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-500 transition-all">
@@ -764,6 +809,7 @@ export default function DashboardPage() {
 
       {showAddFriend && <AddFriendModal onClose={() => setShowAddFriend(false)} />}
       {showCreate    && <CreateGroupModal onClose={() => setShowCreate(false)} />}
+      {showCurrency  && <CurrencyConverter onClose={() => setShowCurrency(false)} />}
     </div>
   );
 }

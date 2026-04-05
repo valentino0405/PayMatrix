@@ -64,6 +64,9 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       groupId:     id,             // always use the URL param, not request body
       description: body.description.trim(),
       amount:      Number(body.amount),
+      originalAmount: body.originalAmount ? Number(body.originalAmount) : Number(body.amount),
+      originalCurrency: typeof body.originalCurrency === 'string' ? body.originalCurrency.toUpperCase() : 'INR',
+      conversionRate: body.conversionRate ? Number(body.conversionRate) : 1,
       paidBy:      body.paidBy,
       splitType:   body.splitType,
       splits:      Array.isArray(body.splits) ? body.splits : [],

@@ -75,11 +75,14 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
     return notifs;
   }, [settlements, expenses, members, group]);
 
-  // MERGED ROUTING LOGIC
-  if (!group) { 
-    router.replace('/dashboard'); 
-    return null; 
-  }
+  // MERGED ROUTING LOGIC — must be in useEffect, not during render
+  useEffect(() => {
+    if (!group) {
+      router.replace('/dashboard');
+    }
+  }, [group, router]);
+
+  if (!group) return null;
 
   const handleCopyInvite = async () => {
     try {
@@ -277,8 +280,6 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
       <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
         {children}
       </main>
-
-      <ChatbotWidget groupId={id} />
     </div>
   );
 }

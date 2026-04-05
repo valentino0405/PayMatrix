@@ -8,6 +8,9 @@ export interface IExpenseSplit { memberId: string; amount: number; }
 export interface IExpense extends Document {
   groupId: string; description: string; amount: number; paidBy: string;
   splitType: SplitType; splits: IExpenseSplit[]; category: Category;
+  originalAmount?: number;
+  originalCurrency?: string;
+  conversionRate?: number;
   isSuspicious?: boolean;
   createdAt: Date; updatedAt: Date;
 }
@@ -21,6 +24,9 @@ const ExpenseSchema = new Schema<IExpense>({
   groupId:     { type: String, required: true, index: true },
   description: { type: String, required: true },
   amount:      { type: Number, required: true },
+  originalAmount: { type: Number },
+  originalCurrency: { type: String, default: 'INR' },
+  conversionRate: { type: Number, default: 1 },
   paidBy:      { type: String, required: true },
   splitType:   { type: String, enum: ['equal','unequal','percentage'], required: true },
   splits:      { type: [SplitSchema], default: [] },

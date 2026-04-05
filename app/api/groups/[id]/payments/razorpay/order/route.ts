@@ -3,7 +3,6 @@ import { auth } from '@clerk/nextjs/server';
 import { connectDB } from '@/lib/mongodb';
 import PaymentTransaction from '@/lib/models/PaymentTransaction';
 import Razorpay from 'razorpay';
-import crypto from 'crypto';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -26,6 +25,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const to = String(body.to ?? '').trim();
     const amount = Number(body.amount ?? 0);
     const targetAmount = body.targetAmount == null ? null : Number(body.targetAmount);
+    const city = String(body.city ?? '').trim().toLowerCase();
+    const reminderAt = body.reminderAt ? new Date(body.reminderAt) : undefined;
 
     if (!from || !to || !(amount > 0)) {
       return NextResponse.json({ error: 'Invalid payment payload' }, { status: 400 });
@@ -63,6 +64,11 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       providerOrderId: uid('ord'), // Internal ID
       razorpayOrderId: rzpOrder.id,
       note: body.note ? String(body.note) : undefined,
+      locationTag: {
+        city: city || undefined,
+      },
+      reminderAt: reminderAt && !Number.isNaN(reminderAt.getTime()) ? reminderAt : undefined,
+      reminderStatus: reminderAt && !Number.isNaN(reminderAt.getTime()) ? 'scheduled' : 'none',
       createdByClerkId: userId,
     });
 
