@@ -19,7 +19,7 @@ const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     message: "I will guide you step-by-step. Click the 'Get Started' button below so we can begin the tour!",
     actionRequired: true,
     waitForNav: '/dashboard',
-    placement: 'screen-bottom'
+    placement: 'screen-left'
   },
   {
     target: '#create-group-btn, #create-group-btn-nav',
@@ -34,7 +34,7 @@ const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     message: "1. Give your group a fun name.\n2. Add at least 2 members. (Press the '+ Add member' button to add more!).\n3. Click 'Create Group'.\n\n(I'll wait here until you're done!)",
     actionRequired: true,
     waitForNav: '/groups/', // Wait for actual group creation and router redirect!
-    placement: 'screen-top'
+    placement: 'screen-left'
   },
   {
     target: '#add-expense-btn',
