@@ -75,11 +75,14 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
     return notifs;
   }, [settlements, expenses, members, group]);
 
-  // MERGED ROUTING LOGIC
-  if (!group) { 
-    router.replace('/dashboard'); 
-    return null; 
-  }
+  // MERGED ROUTING LOGIC — must be in useEffect, not during render
+  useEffect(() => {
+    if (!group) {
+      router.replace('/dashboard');
+    }
+  }, [group, router]);
+
+  if (!group) return null;
 
   const handleCopyInvite = async () => {
     try {
