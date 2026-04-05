@@ -2,9 +2,10 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Script from 'next/script';
-import { Zap, ArrowRight, Check, TrendingDown, Users, Receipt, DollarSign, Loader2, CreditCard, MapPin, CalendarDays } from 'lucide-react';
+import { Zap, ArrowRight, Check, TrendingDown, Users, Receipt, DollarSign, Loader2, CreditCard, MapPin, CalendarDays, FileText } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { calculateSettlements, naiveTransactionCount, Transaction } from '@/lib/settlement';
+import { generateTransactionReceipt } from '@/lib/pdf-utils';
 
 declare global {
   interface Window {
@@ -207,7 +208,17 @@ export default function SettlePage() {
 
             // 4. Update UI state on successful verification
             if (verifyData?.transaction) {
-              setPayments(prev => [verifyData.transaction as PaymentRecord, ...prev]);
+              const updatedTxn = verifyData.transaction as PaymentRecord;
+              setPayments(prev => [updatedTxn, ...prev]);
+              
+              // Trigger professional PDF receipt download automatically
+              if (group) {
+                generateTransactionReceipt(updatedTxn, { 
+                  id: group.id, 
+                  name: group.name, 
+                  members: group.members 
+                });
+              }
             }
 
             if (verifyData?.settlement || verifyData?.alreadySettled || Number(verifyData?.remaining ?? 0) <= 0) {
@@ -526,12 +537,22 @@ export default function SettlePage() {
                           {matchedPayment.locationTag?.city && <span className="text-indigo-300/80">{matchedPayment.locationTag.city}</span>}
                           {matchedPayment.reminderAt && <span className="inline-flex items-center gap-1"><CalendarDays className="h-3 w-3" />{new Date(matchedPayment.reminderAt).toLocaleString('en-IN')}</span>}
                           {matchedPayment._id && (
-                            <a
-                              href={`/api/groups/${id}/payments/${matchedPayment._id}/calendar`}
-                              className="underline decoration-dotted hover:text-white"
-                            >
-                              Download .ics reminder
-                            </a>
+                            <div className="flex items-center gap-3">
+                              <a
+                                href={`/api/groups/${id}/payments/${matchedPayment._id}/calendar`}
+                                className="underline decoration-dotted hover:text-white"
+                              >
+                                Download .ics reminder
+                              </a>
+                              <span className="text-slate-600">•</span>
+                              <button
+                                onClick={() => group && generateTransactionReceipt(matchedPayment, { id: group.id, name: group.name, members: group.members })}
+                                className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-bold transition-all"
+                              >
+                                <FileText className="h-3 w-3" />
+                                Download Receipt
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
