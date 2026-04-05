@@ -1,0 +1,6 @@
+- OCR Receipt Scanner with auto-extraction (amount, date, description)
+- Scan-to-Group flow (open scanner from a group, group auto-selected/locked)
+- Friends system (invite links, pending/accepted states, settle/unsettle, delete friend/invite)
+- Global-settlement optimization across all groups (not just inside one group)
+- Payment history and settlement/payment tracking (including Razorpay path)
+- Voice input support in expense/chat flows

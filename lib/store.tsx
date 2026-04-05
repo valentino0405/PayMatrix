@@ -16,6 +16,10 @@ export interface Friend {
   note?: string;
   settled: boolean;
   settledAt?: string;
+  unread?: boolean;
+  paymentStatus?: 'pending' | 'done' | 'none';
+  lastUpdateType?: 'created' | 'accepted' | 'balance_updated' | 'settled' | 'unsettled' | 'note_updated';
+  lastUpdatedAt?: string;
   status: 'accepted' | 'pending';
   createdAt: string;
 }
@@ -91,6 +95,7 @@ interface StoreCtx {
   settleFriend: (id: string) => Promise<void>;
   unsettleFriend: (id: string) => Promise<void>;
   updateFriendBalance: (id: string, balance: number) => Promise<void>;
+  markFriendRead: (id: string) => Promise<void>;
   deleteFriend: (id: string) => Promise<void>;
 }
 
@@ -380,7 +385,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ settled: true }),
     });
-    setFriends(p => p.map(f => f.id === id ? { ...f, settled: true, balance: 0, settledAt: new Date().toISOString() } : f));
+    setFriends(p => p.map(f => f.id === id ? {
+      ...f,
+      settled: true,
+      balance: 0,
+      settledAt: new Date().toISOString(),
+      paymentStatus: 'done',
+      unread: false,
+      lastUpdateType: 'settled',
+      lastUpdatedAt: new Date().toISOString(),
+    } : f));
   }, []);
 
   const unsettleFriend = useCallback(async (id: string) => {
@@ -389,7 +403,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ settled: false }),
     });
-    setFriends(p => p.map(f => f.id === id ? { ...f, settled: false, settledAt: undefined } : f));
+    setFriends(p => p.map(f => f.id === id ? {
+      ...f,
+      settled: false,
+      settledAt: undefined,
+      paymentStatus: Math.abs(f.balance) > 0 ? 'pending' : 'none',
+      unread: false,
+      lastUpdateType: 'unsettled',
+      lastUpdatedAt: new Date().toISOString(),
+    } : f));
   }, []);
 
   const updateFriendBalance = useCallback(async (id: string, balance: number) => {
@@ -398,7 +420,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ balance }),
     });
-    setFriends(p => p.map(f => f.id === id ? { ...f, balance, settled: false } : f));
+    setFriends(p => p.map(f => f.id === id ? {
+      ...f,
+      balance,
+      settled: false,
+      paymentStatus: Math.abs(balance) > 0 ? 'pending' : 'none',
+      unread: false,
+      lastUpdateType: 'balance_updated',
+      lastUpdatedAt: new Date().toISOString(),
+    } : f));
+  }, []);
+
+  const markFriendRead = useCallback(async (id: string) => {
+    const res = await fetch(`/api/friends/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markRead: true }),
+    });
+    if (!res.ok) throw new Error('Failed to mark friend update as read');
+    setFriends(p => p.map(f => f.id === id ? { ...f, unread: false } : f));
   }, []);
 
   const deleteFriend = useCallback(async (id: string) => {
@@ -415,7 +455,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       groups, expenses, friends, loading, friendsLoading,
       addGroup, deleteGroup, updateGroupName, addMember, removeMember, updateGroupBudget, addExpense, deleteExpense,
       getGroup, getGroupExpenses, getGroupSettlements, getGroupPayments, getNetBalances, refreshGroups, refreshFriends,
-      addFriend, inviteFriend, settleFriend, unsettleFriend, updateFriendBalance, deleteFriend,
+      addFriend, inviteFriend, settleFriend, unsettleFriend, updateFriendBalance, markFriendRead, deleteFriend,
     }}>
       {children}
     </Ctx.Provider>

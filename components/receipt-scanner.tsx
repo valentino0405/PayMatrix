@@ -400,7 +400,7 @@ export default function ReceiptScanner() {
           'relative flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-10 transition-colors',
           dragging
             ? 'border-indigo-500/60 bg-indigo-500/10'
-            : 'border-white/15 bg-white/[0.03] hover:border-indigo-500/50 hover:bg-white/[0.06]',
+            : 'border-white/15 bg-white/3 hover:border-indigo-500/50 hover:bg-white/6',
         ].join(' ')}
       >
         <input
@@ -466,7 +466,7 @@ export default function ReceiptScanner() {
 
       {/* ── Progress ── */}
       {scanning && (
-        <div id="receipt-progress" className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.04] p-5">
+        <div id="receipt-progress" className="space-y-2 rounded-2xl border border-white/10 bg-white/4 p-5">
           <div className="flex items-center gap-2 text-sm font-medium text-white">
             <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
             {progressLabel || 'Processing…'}
@@ -489,7 +489,7 @@ export default function ReceiptScanner() {
 
       {/* ── Results ── */}
       {parsed && (
-        <div id="receipt-results" className="space-y-5 rounded-2xl border border-white/10 bg-white/[0.04] p-6 shadow-sm">
+        <div id="receipt-results" className="space-y-5 rounded-2xl border border-white/10 bg-white/4 p-6 shadow-sm">
           <div className="flex items-center gap-2 text-emerald-400">
             <CheckCircle2 className="h-5 w-5" />
             <h2 className="font-semibold">Receipt Scanned Successfully</h2>
@@ -502,7 +502,7 @@ export default function ReceiptScanner() {
               { label: 'Date', value: parsed.date, id: 'result-date' },
               { label: 'Description', value: descriptionInput, id: 'result-description' },
             ].map(({ label, value, id }) => (
-              <div key={label} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+              <div key={label} className="rounded-xl border border-white/10 bg-white/3 px-4 py-3">
                 <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{label}</p>
                 <p id={id} className="mt-1 truncate text-sm font-semibold text-white">
                   {value || <span className="font-normal italic text-slate-500">Not detected</span>}
@@ -544,7 +544,7 @@ export default function ReceiptScanner() {
           </div>
 
           {!isGroupLocked && (
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+          <div className="rounded-xl border border-white/10 bg-white/3 p-3">
             <button
               type="button"
               onClick={() => setShowCreateGroup((v) => !v)}
@@ -633,7 +633,7 @@ export default function ReceiptScanner() {
           </label>
 
           {selectedGroup && (
-            <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="space-y-3 rounded-xl border border-white/10 bg-white/3 p-4">
               <label className="space-y-1 block">
                 <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Paid by</span>
                 <select
@@ -733,7 +733,7 @@ export default function ReceiptScanner() {
             <summary className="cursor-pointer select-none text-slate-400 hover:text-slate-300">
               Show raw extracted text
             </summary>
-            <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs leading-relaxed text-slate-300">
+            <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-white/3 p-3 text-xs leading-relaxed text-slate-300">
               {rawText}
             </pre>
           </details>

@@ -15,6 +15,10 @@ export interface IFriendship extends Document {
   note: string;           // optional description
   settled: boolean;
   settledAt: Date | null;
+  unreadByA: boolean;
+  unreadByB: boolean;
+  lastUpdateType: 'created' | 'accepted' | 'balance_updated' | 'settled' | 'unsettled' | 'note_updated';
+  lastUpdatedAt: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,6 +38,14 @@ const FriendshipSchema = new Schema<IFriendship>({
   note:         { type: String, default: '' },
   settled:      { type: Boolean, default: false },
   settledAt:    { type: Date, default: null },
+  unreadByA:    { type: Boolean, default: false },
+  unreadByB:    { type: Boolean, default: false },
+  lastUpdateType: {
+    type: String,
+    enum: ['created', 'accepted', 'balance_updated', 'settled', 'unsettled', 'note_updated'],
+    default: 'created',
+  },
+  lastUpdatedAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 
 // Compound index — ensure unique pair

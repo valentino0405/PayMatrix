@@ -26,6 +26,8 @@ export async function GET() {
     // Transform friendships to a unified Friend shape from the current user's POV
     const friends = friendships.map(f => {
       const isA = f.userAClerkId === userId;
+      const unread = Boolean(isA ? f.unreadByA : f.unreadByB);
+      const paymentStatus = f.settled ? 'done' : (Math.abs(Number(f.balance ?? 0)) > 0 ? 'pending' : 'none');
       return {
         id:       (f._id as { toString(): string }).toString(),
         name:     isA ? f.userBName  : f.userAName,
@@ -36,6 +38,10 @@ export async function GET() {
         note:     f.note ?? '',
         settled:  f.settled,
         settledAt:f.settledAt ? (f.settledAt as Date).toISOString() : undefined,
+        unread,
+        paymentStatus,
+        lastUpdateType: f.lastUpdateType ?? 'created',
+        lastUpdatedAt: (f.lastUpdatedAt as Date | undefined)?.toISOString() ?? (f.updatedAt as Date).toISOString(),
         status:   'accepted' as const,
         createdAt:(f.createdAt as Date).toISOString(),
       };
@@ -52,6 +58,10 @@ export async function GET() {
       note:     inv.note ?? '',
       settled:  false,
       settledAt:undefined,
+      unread:   false,
+      paymentStatus: 'none' as const,
+      lastUpdateType: 'created' as const,
+      lastUpdatedAt:(inv.updatedAt as Date).toISOString(),
       status:   'pending' as const,
       createdAt:(inv.createdAt as Date).toISOString(),
     }));

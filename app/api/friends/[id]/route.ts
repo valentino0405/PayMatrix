@@ -23,15 +23,32 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const isB = friendship.userBClerkId === userId;
     if (!isA && !isB) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+    if (body.markRead === true) {
+      if (isA) friendship.unreadByA = false;
+      if (isB) friendship.unreadByB = false;
+      await friendship.save();
+
+      return NextResponse.json({
+        id: friendship._id.toString(),
+        unread: isA ? friendship.unreadByA : friendship.unreadByB,
+      });
+    }
+
+    let changed = false;
+
     if ('settled' in body) {
       if (body.settled) {
         friendship.settled = true;
         friendship.settledAt = new Date();
         friendship.balance = 0;
+        friendship.lastUpdateType = 'settled';
+        changed = true;
       } else {
         // Unsettle
         friendship.settled = false;
         friendship.settledAt = null;
+        friendship.lastUpdateType = 'unsettled';
+        changed = true;
       }
     }
 
@@ -40,10 +57,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       // balance from API is always from the current user's POV (positive = friend owes me)
       // In DB: balance = positive means B owes A
       friendship.balance = isA ? newBalance : -newBalance;
+      friendship.lastUpdateType = 'balance_updated';
+      changed = true;
     }
 
     if ('note' in body) {
       friendship.note = body.note;
+      friendship.lastUpdateType = 'note_updated';
+      changed = true;
+    }
+
+    if (changed) {
+      friendship.lastUpdatedAt = new Date();
+      friendship.unreadByA = isA ? false : true;
+      friendship.unreadByB = isB ? false : true;
     }
 
     await friendship.save();
@@ -55,6 +82,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       settled:  friendship.settled,
       settledAt:friendship.settledAt?.toISOString(),
       note:     friendship.note,
+      unread:   isA ? friendship.unreadByA : friendship.unreadByB,
+      paymentStatus: friendship.settled ? 'done' : (Math.abs(Number(friendship.balance ?? 0)) > 0 ? 'pending' : 'none'),
+      lastUpdateType: friendship.lastUpdateType,
+      lastUpdatedAt: friendship.lastUpdatedAt?.toISOString(),
     });
   } catch (err) {
     console.error('PATCH FRIEND ERROR:', err);

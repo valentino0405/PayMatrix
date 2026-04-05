@@ -203,7 +203,7 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
       <button
         onClick={() => setIsOpen(true)}
         aria-label="Open AI Copilot"
-        className={`fixed bottom-24 right-6 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-[0_8px_30px_rgba(99,102,241,0.55)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(99,102,241,0.7)] ${isOpen ? 'scale-0 opacity-0 pointer-events-none' : 'scale-100 opacity-100'} ${isNudged ? 'animate-bounce ring-4 ring-indigo-500/50' : ''}`}
+        className={`fixed bottom-24 right-6 z-60 flex h-14 w-14 items-center justify-center rounded-full bg-linear-to-br from-indigo-600 to-violet-600 text-white shadow-[0_8px_30px_rgba(99,102,241,0.55)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(99,102,241,0.7)] ${isOpen ? 'scale-0 opacity-0 pointer-events-none' : 'scale-100 opacity-100'} ${isNudged ? 'animate-bounce ring-4 ring-indigo-500/50' : ''}`}
       >
         {/* Pulse ring */}
         <span className="absolute inset-0 rounded-full animate-ping bg-indigo-500 opacity-20" />
@@ -216,14 +216,14 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
 
       {/* Chat window */}
       <div
-        className={`fixed bottom-6 right-6 z-[60] flex flex-col w-[360px] sm:w-[420px] overflow-hidden rounded-3xl border border-white/10 bg-[#0e0e1a]/[0.97] backdrop-blur-2xl shadow-[0_25px_60px_rgba(0,0,0,0.7)] transition-all duration-300 origin-bottom-right ${isOpen ? 'scale-100 opacity-100 h-[540px]' : 'scale-0 opacity-0 h-0 pointer-events-none'}`}
+        className={`fixed bottom-6 right-6 z-60 flex flex-col w-90 sm:w-105 overflow-hidden rounded-3xl border border-white/10 bg-[#0e0e1a]/97 backdrop-blur-2xl shadow-[0_25px_60px_rgba(0,0,0,0.7)] transition-all duration-300 origin-bottom-right ${isOpen ? 'scale-100 opacity-100 h-135' : 'scale-0 opacity-0 h-0 pointer-events-none'}`}
       >
 
         {/* ── Header ────────────────────────────────────────────────────── */}
-        <div className="relative flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-white/[0.07] bg-gradient-to-r from-indigo-500/10 via-violet-500/5 to-transparent overflow-hidden">
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-indigo-600/10 to-transparent" />
+        <div className="relative shrink-0 flex items-center justify-between px-4 py-3 border-b border-white/[0.07] bg-linear-to-r from-indigo-500/10 via-violet-500/5 to-transparent overflow-hidden">
+          <div className="pointer-events-none absolute inset-0 bg-linear-to-r from-indigo-600/10 to-transparent" />
           <div className="relative flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow-lg shadow-indigo-500/30">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500 to-violet-500 shadow-lg shadow-indigo-500/30">
               <Bot className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -250,15 +250,15 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
               {msg.role === 'assistant' && (
-                <div className="flex-shrink-0 mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-indigo-500/20 border border-indigo-500/30">
+                <div className="shrink-0 mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-indigo-500/20 border border-indigo-500/30">
                   <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
                 </div>
               )}
               <div
                 className={`max-w-[82%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                   msg.role === 'user'
-                    ? 'rounded-br-sm bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-500/20'
-                    : 'rounded-bl-sm bg-white/[0.06] border border-white/[0.08] text-slate-200'
+                    ? 'rounded-br-sm bg-linear-to-br from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-500/20'
+                    : 'rounded-bl-sm bg-white/6 border border-white/8 text-slate-200'
                 }`}
               >
                 {msg.content}
@@ -269,10 +269,10 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
           {/* Typing indicator */}
           {isTyping && (
             <div className="flex items-end gap-2 justify-start">
-              <div className="flex-shrink-0 mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-indigo-500/20 border border-indigo-500/30">
+              <div className="shrink-0 mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-indigo-500/20 border border-indigo-500/30">
                 <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
               </div>
-              <div className="rounded-2xl rounded-bl-sm bg-white/[0.06] border border-white/[0.08] px-4 py-3 flex items-center gap-1.5">
+              <div className="rounded-2xl rounded-bl-sm bg-white/6 border border-white/8 px-4 py-3 flex items-center gap-1.5">
                 {[0, 150, 300].map(delay => (
                   <span
                     key={delay}
@@ -289,12 +289,12 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
 
         {/* ── Suggestion chips (only on first load) ─────────────────────── */}
         {messages.length === 1 && !isTyping && (
-          <div className="flex-shrink-0 flex gap-2 px-4 pb-2 overflow-x-auto scrollbar-hide">
+          <div className="shrink-0 flex gap-2 px-4 pb-2 overflow-x-auto scrollbar-hide">
             {SUGGESTIONS.map((s, i) => (
               <button
                 key={i}
                 onClick={() => handleSuggestion(s.label)}
-                className="flex-shrink-0 flex items-center gap-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20 hover:border-indigo-500/50 transition-all"
+                className="shrink-0 flex items-center gap-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20 hover:border-indigo-500/50 transition-all"
               >
                 <s.icon className="h-3 w-3" />
                 {s.label}
@@ -304,13 +304,13 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
         )}
 
         {/* ── Input bar ─────────────────────────────────────────────────── */}
-        <div className="flex-shrink-0 border-t border-white/[0.07] bg-white/[0.02] p-3">
+        <div className="shrink-0 border-t border-white/[0.07] bg-white/2 p-3">
           <form onSubmit={handleSubmit} className="flex items-center gap-2">
             {/* Voice button */}
             <button
               type="button"
               onClick={toggleVoice}
-              className={`flex-shrink-0 flex h-10 w-10 items-center justify-center rounded-full border transition-all ${isListening ? 'border-rose-500/50 bg-rose-500/20 text-rose-400 animate-pulse' : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+              className={`shrink-0 flex h-10 w-10 items-center justify-center rounded-full border transition-all ${isListening ? 'border-rose-500/50 bg-rose-500/20 text-rose-400 animate-pulse' : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'}`}
               title="Voice input"
             >
               {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
@@ -322,13 +322,13 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
               value={input}
               onChange={e => setInput(e.target.value)}
               placeholder="Ask anything about your finances..."
-              className="flex-1 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500/50 focus:bg-white/[0.08] transition-all"
+              className="flex-1 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500/50 focus:bg-white/8 transition-all"
             />
 
             <button
               type="submit"
               disabled={!input.trim() || isTyping}
-              className="flex-shrink-0 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30 transition-all hover:shadow-indigo-500/50 hover:-translate-y-0.5 disabled:opacity-40 disabled:translate-y-0 disabled:shadow-none"
+              className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full bg-linear-to-br from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30 transition-all hover:shadow-indigo-500/50 hover:-translate-y-0.5 disabled:opacity-40 disabled:translate-y-0 disabled:shadow-none"
             >
               {isTyping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 ml-0.5" />}
             </button>
@@ -339,7 +339,7 @@ export default function ChatbotWidget({ groupId }: { groupId?: string }) {
 
       {/* Highlight dismiss overlay — clicking anywhere removes highlight */}
       {highlightedEl && (
-        <div className="fixed inset-0 z-[55] cursor-pointer" onClick={removeHighlight} />
+        <div className="fixed inset-0 z-55 cursor-pointer" onClick={removeHighlight} />
       )}
     </>
   );
