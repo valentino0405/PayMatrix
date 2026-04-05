@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useStore, GroupType, MEMBER_COLORS, Friend } from '@/lib/store';
 import { syncUser } from '@/app/actions/userActions';
+import CurrencyConverter from '@/components/CurrencyConverter';
 
 const GROUP_TYPES: GroupType[] = ['Trip', 'Roommates', 'Event', 'Other'];
 const TYPE_EMOJI: Record<GroupType, string> = { Trip: '✈️', Roommates: '🏠', Event: '🎉', Other: '💼' };
@@ -653,6 +654,7 @@ export default function DashboardPage() {
   const [tab, setTab]                 = useState<Tab>('groups');
   const [showCreate, setShowCreate]   = useState(false);
   const [showAddFriend, setShowAddFriend] = useState(false);
+  const [showCurrency, setShowCurrency]   = useState(false);
 
   useEffect(() => { syncUser().catch(console.error); }, []);
 
@@ -674,6 +676,10 @@ export default function DashboardPage() {
               <Link href="/global-settle" className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all">
                 🌍 Global Optimization
               </Link>
+              <button onClick={() => setShowCurrency(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2 text-sm font-bold text-violet-300 hover:bg-violet-500/20 transition-all">
+                💱 Convert
+              </button>
               {tab === 'friends' ? (
                 <button onClick={() => setShowAddFriend(true)}
                   className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-500 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)]">
@@ -720,8 +726,12 @@ export default function DashboardPage() {
 
           <div className="mt-2 flex gap-2 sm:hidden">
             <Link href="/global-settle" className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all">
-              🌍 Global optimization
+              🌍 Global
             </Link>
+            <button onClick={() => setShowCurrency(true)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs font-bold text-violet-300 hover:bg-violet-500/20 transition-all">
+              💱 Convert
+            </button>
             {tab === 'friends' ? (
               <button onClick={() => setShowAddFriend(true)}
                 className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-500 transition-all">
@@ -767,6 +777,7 @@ export default function DashboardPage() {
 
       {showAddFriend && <AddFriendModal onClose={() => setShowAddFriend(false)} />}
       {showCreate    && <CreateGroupModal onClose={() => setShowCreate(false)} />}
+      {showCurrency  && <CurrencyConverter onClose={() => setShowCurrency(false)} />}
     </div>
   );
 }

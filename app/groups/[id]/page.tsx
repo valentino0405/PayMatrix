@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Plus, X, Trash2, UtensilsCrossed, Plane, Home, PartyPopper, ShoppingBag, Zap, Heart, MoreHorizontal, Search, Filter, Sparkles, AlertTriangle, Mic, ScanLine } from 'lucide-react';
 import { useStore, Category, SplitType, Member } from '@/lib/store';
+import CurrencyConverter from '@/components/CurrencyConverter';
 
 // Allow SpeechRecognition types
 declare global {
@@ -342,6 +343,7 @@ export default function GroupExpensesPage() {
   const { id } = useParams<{ id: string }>();
   const { getGroup, getGroupExpenses, deleteExpense } = useStore();
   const [showAdd, setShowAdd] = useState(false);
+  const [showCurrency, setShowCurrency] = useState(false);
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState<Category | 'All'>('All');
   const [filterMember, setFilterMember] = useState<string>('All');
@@ -381,6 +383,15 @@ export default function GroupExpensesPage() {
               <div className="text-lg font-extrabold text-white">{s.value}</div>
             </div>
           ))}
+          {/* Currency convert button */}
+          <button
+            onClick={() => setShowCurrency(true)}
+            className="flex items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm font-bold text-violet-300 hover:bg-violet-500/20 transition-all"
+            title="Convert total to another currency"
+          >
+            <span className="text-base">💱</span>
+            <span className="hidden sm:inline">Convert</span>
+          </button>
         </div>
       )}
 
@@ -541,6 +552,12 @@ export default function GroupExpensesPage() {
       </button>
 
       {showAdd && <AddExpenseModal groupId={id} onClose={() => setShowAdd(false)} />}
+      {showCurrency && (
+        <CurrencyConverter
+          onClose={() => setShowCurrency(false)}
+          initialAmount={totalAmount}
+        />
+      )}
     </div>
   );
 }
