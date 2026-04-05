@@ -281,7 +281,7 @@ export default function AnalyticsPage() {
                     <Flame className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-none">Top Spender 😂</div>
+                    <div className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-none">Top Spender </div>
                     <div className="text-base font-bold text-white" style={{ color: gamification.topSpender.color }}>{gamification.topSpender.name}</div>
                     <div className="text-[10px] text-slate-500 leading-tight">Dropped the biggest bags this trip</div>
                   </div>

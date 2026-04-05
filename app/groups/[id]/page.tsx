@@ -457,7 +457,7 @@ export default function GroupExpensesPage() {
             const cat = CATEGORY_META[expense.category];
             // RESOLVED CONFLICT: Included the suspicious expense styling
             return (
-              <div key={expense.id} className={`group relative rounded-2xl border p-4 transition-all hover:bg-white/[0.05] ${expense.isSuspicious ? 'border-rose-500/40 bg-rose-500/5 hover:border-rose-500/60' : 'border-white/[0.07] bg-white/[0.035] hover:border-white/15'}`}>
+              <div key={expense.id} className={`group relative rounded-2xl border p-4 transition-all hover:bg-white/5 ${expense.isSuspicious ? 'border-rose-500/40 bg-rose-500/5 hover:border-rose-500/60' : 'border-white/[0.07] bg-white/[0.035] hover:border-white/15'}`}>
                 <div className="flex items-start gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl" style={{ backgroundColor: cat.color + '20' }}>{cat.emoji}</div>
                   <div className="flex-1 min-w-0">
