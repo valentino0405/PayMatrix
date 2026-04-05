@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { CalendarDays, MapPin, RefreshCw, ReceiptIndianRupee } from 'lucide-react';
+import { CalendarDays, FileText, MapPin, RefreshCw, ReceiptIndianRupee } from 'lucide-react';
 import { useStore } from '@/lib/store';
+import { generateTransactionReceipt } from '@/lib/pdf-utils';
 
 type PaymentStatus = 'initiated' | 'processing' | 'success' | 'failed';
 
@@ -13,7 +14,7 @@ interface PaymentRow {
   to: string;
   amount: number;
   status: PaymentStatus;
-  method: 'UPI_DEMO';
+  method: 'UPI_DEMO' | 'RAZORPAY';
   locationTag?: { label?: string; city?: string };
   reminderAt?: string;
   paidAt?: string;
@@ -25,6 +26,11 @@ const STATUS_META: Record<PaymentStatus, { text: string; cls: string }> = {
   processing: { text: 'Processing', cls: 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' },
   success: { text: 'Success', cls: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' },
   failed: { text: 'Failed', cls: 'bg-rose-500/20 text-rose-300 border border-rose-500/30' },
+};
+
+const MODE_META: Record<PaymentRow['method'], { text: string; cls: string }> = {
+  UPI_DEMO: { text: 'Cash', cls: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' },
+  RAZORPAY: { text: 'UPI', cls: 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' },
 };
 
 const toDateInputValue = (d: Date) => {
@@ -125,41 +131,58 @@ export default function PaymentsPage() {
       </div>
 
       <div className="grid gap-2 rounded-2xl border border-white/10 bg-white/5 p-4 md:grid-cols-4">
-        <select
-          value={status}
-          onChange={e => setStatus(e.target.value as 'all' | PaymentStatus)}
-          className="rounded-lg border border-white/10 bg-[#111118] px-3 py-2 text-xs text-white"
-        >
-          <option value="all">All status</option>
-          <option value="initiated">Initiated</option>
-          <option value="processing">Processing</option>
-          <option value="success">Success</option>
-          <option value="failed">Failed</option>
-        </select>
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold text-slate-400">Payment Status</p>
+          <select
+            value={status}
+            onChange={e => setStatus(e.target.value as 'all' | PaymentStatus)}
+            className="w-full rounded-lg border border-white/10 bg-[#111118] px-3 py-2 text-xs text-white"
+          >
+            <option value="all">All status</option>
+            <option value="initiated">Initiated</option>
+            <option value="processing">Processing</option>
+            <option value="success">Success</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
 
-        <select
-          value={city}
-          onChange={e => setCity(e.target.value)}
-          className="rounded-lg border border-white/10 bg-[#111118] px-3 py-2 text-xs text-white"
-        >
-          {cityOptions.map(c => (
-            <option key={c} value={c}>{c === 'all' ? 'All cities' : c}</option>
-          ))}
-        </select>
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold text-slate-400">Cities</p>
+          <select
+            value={city}
+            onChange={e => setCity(e.target.value)}
+            disabled={cityOptions.length === 1}
+            className="w-full rounded-lg border border-white/10 bg-[#111118] px-3 py-2 text-xs text-white"
+          >
+            {cityOptions.length === 1 ? (
+              <option value="all">No cities available</option>
+            ) : (
+              cityOptions.map(c => (
+                <option key={c} value={c}>{c === 'all' ? 'All cities' : c}</option>
+              ))
+            )}
+          </select>
+        </div>
 
-        <input
-          type="date"
-          value={fromDate}
-          onChange={e => setFromDate(e.target.value)}
-          className="rounded-lg border border-white/10 bg-[#111118] px-3 py-2 text-xs text-white"
-        />
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold text-slate-400">Start Date</p>
+          <input
+            type="date"
+            value={fromDate}
+            onChange={e => setFromDate(e.target.value)}
+            className="w-full rounded-lg border border-white/10 bg-[#111118] px-3 py-2 text-xs text-white"
+          />
+        </div>
 
-        <input
-          type="date"
-          value={toDate}
-          onChange={e => setToDate(e.target.value)}
-          className="rounded-lg border border-white/10 bg-[#111118] px-3 py-2 text-xs text-white"
-        />
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold text-slate-400">End Date</p>
+          <input
+            type="date"
+            value={toDate}
+            onChange={e => setToDate(e.target.value)}
+            className="w-full rounded-lg border border-white/10 bg-[#111118] px-3 py-2 text-xs text-white"
+          />
+        </div>
       </div>
 
       {loading ? (
@@ -181,29 +204,40 @@ export default function PaymentsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center gap-1 text-sm font-bold text-white"><ReceiptIndianRupee className="h-4 w-4" />{row.amount.toFixed(2)}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${MODE_META[row.method].cls}`}>{MODE_META[row.method].text}</span>
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_META[row.status].cls}`}>{STATUS_META[row.status].text}</span>
                   </div>
                 </div>
 
                 <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-400">
                   {row.locationTag?.label && (
-                    <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{row.locationTag.label}</span>
+                    <span className="inline-flex items-center gap-1">City : <MapPin className="h-3.5 w-3.5" />{row.locationTag.label}</span>
                   )}
                   {row.locationTag?.city && <span>{row.locationTag.city}</span>}
-                  {row.reminderAt && (
-                    <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />Reminder: {new Date(row.reminderAt).toLocaleString('en-IN')}</span>
-                  )}
                   {row.createdAt && <span>Created: {new Date(row.createdAt).toLocaleString('en-IN')}</span>}
                 </div>
 
-                {row.status === 'success' && (
-                  <div className="mt-3">
+                {row._id && (
+                  <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
                     <a
                       href={`/api/groups/${id}/payments/${row._id}/calendar`}
-                      className="text-xs font-semibold text-indigo-300 underline decoration-dotted hover:text-white"
+                      className="font-semibold text-indigo-300 underline decoration-dotted hover:text-white"
                     >
-                      Download reminder .ics
+                      Download .ics
                     </a>
+                    {row.method === 'RAZORPAY' && (
+                      <>
+                        <span className="text-slate-600">•</span>
+                        <button
+                          type="button"
+                          onClick={() => generateTransactionReceipt(row, { id: group.id, name: group.name, members: group.members })}
+                          className="inline-flex items-center gap-1 font-semibold text-emerald-400 hover:text-emerald-300"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          Download Receipt
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

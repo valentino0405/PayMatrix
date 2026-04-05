@@ -3,6 +3,7 @@ import { useParams } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import { calculateSettlements } from '@/lib/settlement';
 import { useMemo, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 
 const NODE_R = 28;
 const W = 480;
@@ -72,8 +73,9 @@ function Arrow({ x1, y1, x2, y2, amount, color, markerIndex }: { x1: number; y1:
 
 export default function GraphPage() {
   const { id } = useParams<{ id: string }>();
-  const { getGroup, getNetBalances } = useStore();
+  const { getGroup, getNetBalances, refreshGroups } = useStore();
   const [viewMode, setViewMode] = useState<'initial' | 'current'>('initial');
+  const [refreshing, setRefreshing] = useState(false);
 
   const group = getGroup(id);
   const netBalances = getNetBalances(id, viewMode === 'current');
@@ -85,17 +87,36 @@ export default function GraphPage() {
 
   if (!group) return null;
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshGroups();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const positions = getNodePositions(group.members.length);
   const getMemberIndex = (mid: string) => group.members.findIndex(m => m.id === mid);
 
 
   return (
     <div>
-      <div className="mb-6 text-center">
-        <h2 className="text-xl font-extrabold text-white">Visual Debt Graph</h2>
-        <p className="mt-1 text-sm text-slate-400">
-          Nodes = people • Arrows = optimized payments • Direction shows who pays
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div className="text-center flex-1">
+          <h2 className="text-xl font-extrabold text-white">Visual Debt Graph</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Nodes = people • Arrows = optimized payments • Direction shows who pays
+          </p>
+        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10 disabled:opacity-60"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
       </div>
 
       <div className="flex justify-center mb-6">

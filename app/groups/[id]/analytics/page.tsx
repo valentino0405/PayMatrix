@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useStore } from '@/lib/store';
-import { Sparkles, AlertTriangle, TrendingUp, CalendarDays, Trophy, Flame, Wallet, Edit2, Loader2, Frown } from 'lucide-react';
+import { AlertTriangle, Wallet, Edit2, RefreshCw } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
@@ -82,9 +82,10 @@ export default function AnalyticsPage() {
   const { id } = useParams<{ id: string }>();
   
   // MERGED STORE STATE
-  const { getGroup, getGroupExpenses, getGroupSettlements, getGroupPayments, updateGroupBudget } = useStore();
+  const { getGroup, getGroupExpenses, getGroupSettlements, getGroupPayments, updateGroupBudget, refreshGroups } = useStore();
   const [viewMode, setViewMode] = useState<'initial' | 'current'>('initial');
   const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   
   const group = getGroup(id);
   const expenses = getGroupExpenses(id);
@@ -100,48 +101,39 @@ export default function AnalyticsPage() {
       .sort((a, b) => b.value - a.value);
   }, [expenses]);
 
-  // ── Member contributions & Gamification ────────────────────────────────────
-  const { memberData, gamification } = useMemo<{ memberData: any[], gamification: { topSpender: any, mvpSaver: any }}>(() => {
-    if (!group) return { memberData: [], gamification: { topSpender: null, mvpSaver: null } };
-    let topSpender = null;
-    let mvpSaver = null;
-    let maxPaid = -1;
-    let maxSumOwedToThem = -1; 
+  // ── Member settlement progress (easy mode) ───────────────────────────────
+  const memberData = useMemo<any[]>(() => {
+    if (!group) return [];
 
-    const md = group.members.map(m => {
-      let paid = expenses.filter(e => e.paidBy === m.id).reduce((s, e) => s + e.amount, 0);
-      let owed = expenses.reduce((s, e) => {
+    return group.members.map(m => {
+      const paidByExpenses = expenses.filter(e => e.paidBy === m.id).reduce((s, e) => s + e.amount, 0);
+      const shareInExpenses = expenses.reduce((s, e) => {
         const split = e.splits.find(sp => sp.memberId === m.id);
         return s + (split?.amount || 0);
       }, 0);
 
-      // Superlatives logic triggers based on initial debts
-      if (paid > maxPaid) { maxPaid = paid; topSpender = m; }
-      
-      const net = paid - owed;
-      if (net > maxSumOwedToThem) { maxSumOwedToThem = net; mvpSaver = m; }
+      const shouldPayTotal = Math.max(0, shareInExpenses - paidByExpenses);
+      let settledDone = 0;
 
-      // View Mode Toggle (Net off settlements if enabled)
       if (viewMode === 'current') {
         const manualSettlementPaid = settlements.filter(s => s.from === m.id && !s.paymentTransactionId).reduce((s, e) => s + e.amount, 0);
-        const manualSettlementReceived = settlements.filter(s => s.to === m.id && !s.paymentTransactionId).reduce((s, e) => s + e.amount, 0);
         const realPaymentPaid = payments.filter(p => p.from === m.id && p.status === 'success').reduce((s, e) => s + e.amount, 0);
-        const realPaymentReceived = payments.filter(p => p.to === m.id && p.status === 'success').reduce((s, e) => s + e.amount, 0);
 
-        owed -= (manualSettlementPaid + realPaymentPaid);
-        paid -= (manualSettlementReceived + realPaymentReceived);
+        settledDone = manualSettlementPaid + realPaymentPaid;
       }
 
-      return { name: m.name, Paid: Math.max(0, Math.round(paid)), Owed: Math.max(0, Math.round(owed)), color: m.color };
+      settledDone = Math.min(shouldPayTotal, settledDone);
+      const remainingToPay = Math.max(0, shouldPayTotal - settledDone);
+
+      return {
+        name: m.name,
+        color: m.color,
+        Paid: Math.round(paidByExpenses),
+        shouldPayTotal: Math.round(shouldPayTotal),
+        Settled: Math.round(settledDone),
+        Remaining: Math.round(remainingToPay),
+      };
     });
-
-    return { 
-      memberData: md, 
-      gamification: {
-        topSpender: maxPaid > 0 ? topSpender : null,
-        mvpSaver: maxSumOwedToThem > 0 ? mvpSaver : null
-      }
-    };
   }, [group, expenses, settlements, payments, viewMode]);
 
   // ── Monthly trend & Predictor ──────────────────────────────────────────────
@@ -193,6 +185,15 @@ export default function AnalyticsPage() {
   const biggestExpense = expenses.reduce((max, e) => e.amount > (max?.amount ?? 0) ? e : max, expenses[0]);
   const isTopCategoryWarning = topCategory && totalSpend > 0 && (topCategory.value / totalSpend) > 0.45;
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshGroups();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   if (!group) return null;
 
   const budgetPct = group.monthlyBudget ? (prediction.thisMonthTotal / group.monthlyBudget) * 100 : 0;
@@ -200,6 +201,16 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10 disabled:opacity-60"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
       
       {/* ── View Toggle Module ─────────────────────────────────────────── */}
       <div className="flex justify-center mt-2 mb-2">
@@ -219,10 +230,8 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* ── Budget & Gamification Row ──────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* Budget Module */}
-        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-5 relative overflow-hidden transition-all hover:bg-white/4">
+      {/* ── Budget Module ────────────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-5 relative overflow-hidden">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-bold text-white flex items-center gap-2"><Wallet className="h-4 w-4 text-emerald-400" /> Monthly Budget</h3>
             <button onClick={() => setShowBudgetModal(true)} className="flex items-center justify-center p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors">
@@ -256,94 +265,8 @@ export default function AnalyticsPage() {
               <p className="text-xs text-slate-500 mt-1">Get alerts on overspending</p>
             </div>
           )}
-        </div>
-
-        {/* Gamification Module */}
-        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-5">
-          <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><Trophy className="h-4 w-4 text-amber-400" /> Group Superlatives</h3>
-          {(gamification.mvpSaver || gamification.topSpender) ? (
-            <div className="space-y-4">
-              {gamification.mvpSaver && (
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400">
-                    <Trophy className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">MVP Saver</div>
-                    <div className="text-base font-bold text-white" style={{ color: gamification.mvpSaver.color }}>{gamification.mvpSaver.name}</div>
-                    <div className="text-[10px] text-slate-500 leading-tight">Covered the most expenses for others</div>
-                  </div>
-                </div>
-              )}
-              {gamification.topSpender && (
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-500/20 border border-rose-500/30 text-rose-400">
-                    <Flame className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-none">Top Spender </div>
-                    <div className="text-base font-bold text-white" style={{ color: gamification.topSpender.color }}>{gamification.topSpender.name}</div>
-                    <div className="text-[10px] text-slate-500 leading-tight">Dropped the biggest bags this trip</div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-20 text-slate-500 text-xs text-center">Add more unequal expenses <br/>to unlock superlatives!</div>
-          )}
-        </div>
       </div>
-
-      {/* ── Smart Insights Banner ────────────────────────────────────────── */}
-      {(expenses.length > 0) && (
-        <div className="rounded-2xl border border-indigo-500/20 bg-linear-to-r from-indigo-500/8 to-violet-500/4 p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="h-5 w-5 text-indigo-400" />
-            <h3 className="text-base font-extrabold text-white tracking-wide">Smart Insights</h3>
-          </div>
-          
-          <div className="grid gap-3 sm:grid-cols-2">
-            {/* Run Rate Predictor */}
-            <div className="flex items-start gap-3 rounded-xl border border-white/5 bg-black/20 p-4">
-              <div className={`p-2 rounded-lg ${prediction.isOverspending ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                {prediction.isOverspending ? <TrendingUp className="h-4 w-4" /> : <CalendarDays className="h-4 w-4" />}
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase mb-1">Run Rate Map</p>
-                <div className="text-sm text-slate-200">
-                  You are projected to spend <strong className="text-white">₹{prediction.projected.toLocaleString('en-IN')}</strong> this month.
-                </div>
-                {prediction.lastMonthTotal > 0 && (
-                  <p className={`text-xs mt-1.5 font-semibold ${prediction.isOverspending ? 'text-rose-400' : 'text-emerald-400'}`}>
-                    {prediction.isOverspending ? `▲ ${prediction.differenceLastMonth}% higher` : `▼ ${Math.abs(prediction.differenceLastMonth)}% lower`} than last month's ₹{prediction.lastMonthTotal.toLocaleString('en-IN')}.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Category Suggestion */}
-            {topCategory && (
-              <div className="flex items-start gap-3 rounded-xl border border-white/5 bg-black/20 p-4">
-                <div className={`p-2 rounded-lg ${isTopCategoryWarning ? 'bg-amber-500/20 text-amber-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
-                  {isTopCategoryWarning ? <AlertTriangle className="h-4 w-4" /> : <PieChart className="h-4 w-4" />}
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase mb-1">Spending Habits</p>
-                  <p className="text-sm text-slate-200">
-                    Your highest spending is on <strong className="text-white">{CATEGORY_EMOJI[topCategory.name]} {topCategory.name}</strong> at ₹{topCategory.value.toLocaleString('en-IN')}.
-                  </p>
-                  {isTopCategoryWarning && (
-                    <p className="text-xs mt-1.5 font-semibold text-amber-400">
-                      💡 Insight: This consumes over {Math.round((topCategory.value / totalSpend) * 100)}% of your group's expenses.
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
+      
       {/* Summary stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
@@ -392,9 +315,10 @@ export default function AnalyticsPage() {
           )}
         </div>
 
-        {/* Member Contributions */}
+        {/* Member Settlement Progress */}
         <div className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-5">
-          <h3 className="text-sm font-bold text-white mb-4">👥 Member Contributions</h3>
+          <h3 className="text-sm font-bold text-white mb-1">👥 Payment Progress by Member</h3>
+          <p className="text-xs text-slate-400 mb-4">Shows total paid by each member, plus their settlement progress (settled vs remaining).</p>
           {memberData.length === 0 ? (
             <div className="flex items-center justify-center h-40 text-slate-500 text-sm">No data</div>
           ) : (
@@ -403,10 +327,11 @@ export default function AnalyticsPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v}`} />
-                <Tooltip content={<BarTooltip />} />
+                <Tooltip content={<BarTooltip />} cursor={{ fill: 'transparent' }} />
                 <Legend wrapperStyle={{ fontSize: 11, color: '#94a3b8' }} />
-                <Bar dataKey="Paid" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Owed" fill="#ec4899" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Paid" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Settled" stackId="progress" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Remaining" stackId="progress" fill="#f97316" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

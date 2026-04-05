@@ -35,6 +35,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const to = String(body.to ?? '').trim();
   const amount = Number(body.amount ?? 0);
   const targetAmount = body.targetAmount == null ? null : Number(body.targetAmount);
+  const city = String(body.city ?? '').trim().toLowerCase();
 
   if (!from || !to || !(amount > 0)) {
     return NextResponse.json({ error: 'Invalid payment payload' }, { status: 400 });
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     note: body.note ? String(body.note) : undefined,
     locationTag: {
       label: body.locationLabel ? String(body.locationLabel) : undefined,
-      city: body.city ? String(body.city) : undefined,
+      city: city || undefined,
       lat: typeof body.lat === 'number' ? body.lat : undefined,
       lng: typeof body.lng === 'number' ? body.lng : undefined,
     },

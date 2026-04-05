@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Plus, X, Trash2, UtensilsCrossed, Plane, Home, PartyPopper, ShoppingBag, Zap, Heart, MoreHorizontal, Search, Filter, Sparkles, AlertTriangle, Mic, ScanLine } from 'lucide-react';
-import { useStore, Category, SplitType, Member } from '@/lib/store';
+import { useStore, Category, SplitType, Member, Expense } from '@/lib/store';
 import CurrencyConverter from '@/components/CurrencyConverter';
 import { useCurrency, SUPPORTED_CURRENCIES } from '@/lib/useCurrency';
 
@@ -383,6 +383,101 @@ function AddExpenseModal({ groupId, onClose }: { groupId: string; onClose: () =>
   );
 }
 
+function ExpenseDetailsModal({
+  expense,
+  group,
+  onClose,
+}: {
+  expense: Expense;
+  group: { members: Member[] };
+  onClose: () => void;
+}) {
+  const payer = group.members.find(m => m.id === expense.paidBy);
+  const originalSymbol = expense.originalCurrency
+    ? (SUPPORTED_CURRENCIES.find(c => c.code === expense.originalCurrency)?.symbol ?? expense.originalCurrency)
+    : '₹';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#111118] shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-5 border-b border-white/[0.07] sticky top-0 bg-[#111118] z-10">
+          <h2 className="text-lg font-bold text-white">Expense Details</h2>
+          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-white/10 hover:text-white transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-4">
+            <p className="text-xs text-slate-500 mb-1">Description</p>
+            <p className="text-base font-semibold text-white">{expense.description}</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-3">
+              <p className="text-xs text-slate-500">Amount (INR)</p>
+              <p className="text-lg font-extrabold text-white">₹{expense.amount.toLocaleString('en-IN')}</p>
+            </div>
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-3">
+              <p className="text-xs text-slate-500">Paid By</p>
+              <p className="text-sm font-bold" style={{ color: payer?.color }}>{payer?.name ?? 'Unknown'}</p>
+            </div>
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-3">
+              <p className="text-xs text-slate-500">Category</p>
+              <p className="text-sm font-semibold text-white">{CATEGORY_META[expense.category].emoji} {expense.category}</p>
+            </div>
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-3">
+              <p className="text-xs text-slate-500">Split Type</p>
+              <p className="text-sm font-semibold text-white capitalize">{expense.splitType}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-3">
+              <p className="text-xs text-slate-500">Created At</p>
+              <p className="text-sm font-semibold text-white">{new Date(expense.createdAt).toLocaleString('en-IN')}</p>
+            </div>
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-3">
+              <p className="text-xs text-slate-500">Fraud Risk</p>
+              <p className={`text-sm font-semibold ${expense.isSuspicious ? 'text-rose-400' : 'text-emerald-400'}`}>
+                {expense.isSuspicious ? 'Flagged' : 'Not flagged'}
+              </p>
+            </div>
+          </div>
+
+          {(expense.originalCurrency && expense.originalCurrency !== 'INR' && expense.originalAmount !== undefined) && (
+            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-3">
+              <p className="text-xs text-indigo-300 mb-1">Original Currency Details</p>
+              <p className="text-sm text-white font-semibold">
+                {originalSymbol}{expense.originalAmount.toLocaleString('en-IN')} {expense.originalCurrency}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">Rate used: {expense.conversionRate?.toFixed(4) ?? 'N/A'} → INR</p>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-4">
+            <p className="text-xs text-slate-500 mb-2">Member-wise Split</p>
+            <div className="space-y-2">
+              {expense.splits.map(s => {
+                const m = group.members.find(mem => mem.id === s.memberId);
+                return (
+                  <div key={s.memberId} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-6 rounded-full" style={{ backgroundColor: m?.color ?? '#666' }} />
+                      <span className="text-sm text-slate-200">{m?.name ?? s.memberId}</span>
+                    </div>
+                    <span className="text-sm font-bold text-white">₹{s.amount.toFixed(2)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function GroupExpensesPage() {
   const { id } = useParams<{ id: string }>();
   const { getGroup, getGroupExpenses, deleteExpense } = useStore();
@@ -392,6 +487,7 @@ export default function GroupExpensesPage() {
   const [filterCategory, setFilterCategory] = useState<Category | 'All'>('All');
   const [filterMember, setFilterMember] = useState<string>('All');
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
 
   const group = getGroup(id);
   const expenses = getGroupExpenses(id);
@@ -512,7 +608,19 @@ export default function GroupExpensesPage() {
             const cat = CATEGORY_META[expense.category];
             // RESOLVED CONFLICT: Included the suspicious expense styling
             return (
-              <div key={expense.id} className={`group relative rounded-2xl border p-4 transition-all hover:bg-white/5 ${expense.isSuspicious ? 'border-rose-500/40 bg-rose-500/5 hover:border-rose-500/60' : 'border-white/[0.07] bg-white/[0.035] hover:border-white/15'}`}>
+              <div
+                key={expense.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedExpense(expense)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedExpense(expense);
+                  }
+                }}
+                className={`group relative rounded-2xl border p-4 transition-all hover:bg-white/5 cursor-pointer ${expense.isSuspicious ? 'border-rose-500/40 bg-rose-500/5 hover:border-rose-500/60' : 'border-white/[0.07] bg-white/[0.035] hover:border-white/15'}`}
+              >
                 <div className="flex items-start gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl" style={{ backgroundColor: cat.color + '20' }}>{cat.emoji}</div>
                   <div className="flex-1 min-w-0">
@@ -546,7 +654,10 @@ export default function GroupExpensesPage() {
                         )}
                         <div className="text-[10px] text-slate-600 mt-0.5">{CATEGORY_META[expense.category].emoji} {expense.category}</div>
                         <button
-                          onClick={() => deleteExpense(expense.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteExpense(expense.id);
+                          }}
                           className="mt-2 ml-auto flex h-7 w-7 items-center justify-center rounded-full text-slate-600 hover:bg-rose-500/20 hover:text-rose-400 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
                           aria-label="Delete expense"
                           title="Delete expense"
@@ -602,6 +713,13 @@ export default function GroupExpensesPage() {
       </button>
 
       {showAdd && <AddExpenseModal groupId={id} onClose={() => setShowAdd(false)} />}
+      {selectedExpense && (
+        <ExpenseDetailsModal
+          expense={selectedExpense}
+          group={group}
+          onClose={() => setSelectedExpense(null)}
+        />
+      )}
       {showCurrency && (
         <CurrencyConverter
           onClose={() => setShowCurrency(false)}
